@@ -3,6 +3,7 @@ import { Inter, Outfit } from 'next/font/google';
 import './globals.css'; // Global styles
 import { AppNavigation } from '@/components/AppNavigation';
 import { FirebaseProvider } from '@/components/FirebaseProvider';
+import { AuthGate } from '@/components/AuthGate';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Analytics } from '@vercel/analytics/next';
 
@@ -26,9 +27,11 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
     <html lang="en" className={`${inter.variable} ${outfit.variable} antialiased`}>
       <body suppressHydrationWarning className="bg-slate-50 text-slate-900 font-sans pb-16 md:pb-0 overflow-x-hidden">
         <FirebaseProvider>
-          <AppNavigation>
-            {children}
-          </AppNavigation>
+          <AuthGate>
+            <AppNavigation>
+              {children}
+            </AppNavigation>
+          </AuthGate>
         </FirebaseProvider>
         <SpeedInsights />
         <Analytics />

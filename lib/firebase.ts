@@ -65,6 +65,13 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
+export const ALLOWED_EMAILS = [
+  'michael711hebert@gmail.com',
+  'littlebear8991@gmail.com',
+  'jchebert2010@gmail.com',
+  'hpfanatic009@gmail.com',
+];
+
 export const signInWithGoogle = async () => {
   try {
     await signInWithPopup(auth, googleProvider);
