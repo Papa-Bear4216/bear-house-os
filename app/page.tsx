@@ -37,7 +37,7 @@ function DailyBriefWidget() {
     try {
       const memory = await getHermesMemory();
       const usageMemory = memory ? buildMemorySummary(memory) : undefined;
-      const todayTasks = tasks.filter(t => t.date === format(new Date(), 'yyyy-MM-dd') && t.status !== 'completed');
+      const todayTasks = tasks.filter(t => t.date === format(new Date(), 'yyyy-MM-dd') && t.status !== 'done');
       const todayEvents = events.filter(e => e.date?.startsWith(format(new Date(), 'yyyy-MM-dd')));
 
       const { content } = await askHermes(
@@ -93,7 +93,7 @@ function MyTasksWidget() {
   const today = format(new Date(), 'yyyy-MM-dd');
 
   const myTasks = tasks
-    .filter(t => t.assigneeId === currentUser?.id && t.status !== 'completed')
+    .filter(t => t.assigneeId === currentUser?.id && t.status !== 'done')
     .sort((a, b) => {
       const aUrgent = a.date && a.date <= today;
       const bUrgent = b.date && b.date <= today;
@@ -115,7 +115,7 @@ function MyTasksWidget() {
             const overdue = task.date && task.date < today;
             return (
               <div key={task.id} className="flex items-center gap-2.5">
-                <button onClick={() => updateTaskStatus(task.id, 'completed')} className="flex-shrink-0">
+                <button onClick={() => updateTaskStatus(task.id, 'done')} className="flex-shrink-0">
                   <Circle className="w-4 h-4 text-slate-300 hover:text-green-500 transition-colors" />
                 </button>
                 <div className="flex-1 min-w-0">
@@ -144,7 +144,7 @@ function FamilyTasksWidget() {
   const today = format(new Date(), 'yyyy-MM-dd');
 
   const urgentTasks = tasks
-    .filter(t => t.status !== 'completed' && t.date && t.date <= today)
+    .filter(t => t.status !== 'done' && t.date && t.date <= today)
     .slice(0, 6);
 
   return (
@@ -160,7 +160,7 @@ function FamilyTasksWidget() {
             const overdue = task.date && task.date < today;
             return (
               <div key={task.id} className="flex items-center gap-2">
-                <button onClick={() => updateTaskStatus(task.id, 'completed')}>
+                <button onClick={() => updateTaskStatus(task.id, 'done')}>
                   <Circle className="w-3.5 h-3.5 text-slate-300 hover:text-green-500" />
                 </button>
                 <p className={`flex-1 text-sm truncate ${overdue ? 'text-red-600 font-medium' : 'text-slate-700'}`}>{task.title}</p>
@@ -268,10 +268,10 @@ function MyMissionsWidget() {
   const { currentUser } = useCurrentUser();
 
   const missions = tasks
-    .filter(t => t.assigneeId === currentUser?.id && t.status !== 'completed')
+    .filter(t => t.assigneeId === currentUser?.id && t.status !== 'done')
     .slice(0, 3);
 
-  const completed = tasks.filter(t => t.assigneeId === currentUser?.id && t.status === 'completed').length;
+  const completed = tasks.filter(t => t.assigneeId === currentUser?.id && t.status === 'done').length;
 
   return (
     <WidgetCard icon={<Star className="w-4 h-4 text-yellow-500" />} title="My Missions" accent="bg-yellow-100"
@@ -290,7 +290,7 @@ function MyMissionsWidget() {
       <div className="space-y-1.5">
         {missions.map(m => (
           <div key={m.id} className="flex items-center gap-2">
-            <button onClick={() => updateTaskStatus(m.id, 'completed')}>
+            <button onClick={() => updateTaskStatus(m.id, 'done')}>
               <Circle className="w-3.5 h-3.5 text-slate-300 hover:text-yellow-500" />
             </button>
             <p className="text-sm text-slate-700 flex-1 truncate">{m.title}</p>
@@ -312,7 +312,7 @@ function FamilyStatusWidget() {
     <WidgetCard icon={<Users className="w-4 h-4 text-slate-600" />} title="Family Status" accent="bg-slate-100">
       <div className="grid grid-cols-2 gap-2">
         {users.map(u => {
-          const pending = tasks.filter(t => t.assigneeId === u.id && t.status !== 'completed' && t.date === today).length;
+          const pending = tasks.filter(t => t.assigneeId === u.id && t.status !== 'done' && t.date === today).length;
           return (
             <div key={u.id} className="flex items-center gap-2">
               <div className={`w-8 h-8 rounded-full ${u.color} flex items-center justify-center text-white text-xs font-black flex-shrink-0`}>
