@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { CalendarDays, Gift, Image as ImageIcon, Video, Home, Menu, X, Cpu, Camera, UserCircle2, Star, Trophy, Gamepad2, UtensilsCrossed, ShoppingCart } from 'lucide-react';
+import { CalendarDays, Gift, Image as ImageIcon, Video, Home, Menu, X, Cpu, Camera, UserCircle2, Star, Trophy, Gamepad2, UtensilsCrossed, ShoppingCart, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useFamilyMembers } from '@/hooks/use-family';
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { name: 'Missions', href: '/missions', icon: Gamepad2 },
   { name: 'Meals', href: '/meals', icon: UtensilsCrossed },
   { name: 'Shopping', href: '/shopping', icon: ShoppingCart },
+  { name: 'Budget', href: '/budget', icon: Wallet },
   { name: 'Hermes', href: '/assistant', icon: Cpu },
   { name: 'Scanner', href: '/scanner', icon: Camera },
   { name: 'Map', href: '/map', icon: Home },
