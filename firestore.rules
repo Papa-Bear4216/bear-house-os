@@ -55,6 +55,13 @@ service cloud.firestore {
       allow write:  if isAllowed();
     }
 
+    // --- Family Messages ---
+    match /familyMessages/{familyCode}/messages/{messageId} {
+      allow read:   if isAllowed();
+      allow create: if isAllowed();
+      allow delete: if isAllowed() && request.auth.uid == resource.data.userId;
+    }
+
     // --- Posts ---
     match /posts/{postId} {
       allow read:   if isAllowed();
