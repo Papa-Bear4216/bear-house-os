@@ -131,8 +131,6 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
         </nav>
 
         <div className="p-4 border-t border-slate-100">
-          <UserSwitcher />
-          
           <Link
             href="/setup-home"
             className="w-full flex items-center justify-center gap-2 mb-4 px-3 py-2 text-xs font-semibold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200/60"
@@ -237,7 +235,6 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
                 </button>
               </div>
               <div className="p-4 border-b border-slate-100">
-                 <UserSwitcher />
                  <Link
                    href="/setup-home"
                    onClick={() => setMobileMenuOpen(false)}
