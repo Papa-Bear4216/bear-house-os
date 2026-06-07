@@ -12,6 +12,8 @@ export interface FamilyContext {
   preferences?: unknown;
   currentUser?: unknown;
   date?: string;
+  budgetSummary?: string;
+  usageMemory?: string;
 }
 
 export async function askHermes(
