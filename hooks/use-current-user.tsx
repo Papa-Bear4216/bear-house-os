@@ -17,48 +17,45 @@ const CurrentUserContext = createContext<CurrentUserContextType>({
 });
 
 export function CurrentUserProvider({ children }: { children: React.ReactNode }) {
-  const [viewingUser, setViewingUser] = useState<AppUser | null>(null);
-  const [viewingId, setViewingIdState] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [currentUser, setCurrentUserState] = useState<AppUser | null>(null);
 
+  // Always follow the authenticated Firebase user — clear any stale UserSwitcher localStorage
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsub = onAuthStateChanged(auth, (user) => {
       if (user) {
-        const stored = localStorage.getItem('viewing_user_id');
-        setViewingIdState(stored || user.uid);
+        // Clear legacy viewing_user_id override so we always load the real profile
+        localStorage.removeItem('viewing_user_id');
+        setViewingId(user.uid);
       } else {
-        setViewingIdState(null);
-        setViewingUser(null);
+        setViewingId(null);
+        setCurrentUserState(null);
       }
     });
-    return () => unsubscribeAuth();
+    return unsub;
   }, []);
 
+  // Subscribe to the Firestore user document
   useEffect(() => {
     if (!viewingId) return;
-    const docRef = doc(db, 'users', viewingId);
-    const unsubscribeDoc = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setViewingUser({ ...docSnap.data(), id: docSnap.id } as AppUser);
+    const unsub = onSnapshot(doc(db, 'users', viewingId), (snap) => {
+      if (snap.exists()) {
+        setCurrentUserState({ ...snap.data(), id: snap.id } as AppUser);
       } else {
-        // Fall back to main authenticated user if document not found
-        const mainUid = auth.currentUser?.uid;
-        if (mainUid && viewingId !== mainUid) {
-          setViewingIdState(mainUid);
-        }
+        setCurrentUserState(null);
       }
     }, (err) => {
-      console.error("Firestore user sub error:", err);
+      console.error('useCurrentUser Firestore error:', err);
     });
-    return () => unsubscribeDoc();
+    return unsub;
   }, [viewingId]);
 
   const setCurrentUser = (id: string) => {
-    setViewingIdState(id);
-    localStorage.setItem('viewing_user_id', id);
+    setViewingId(id);
   };
 
   return (
-    <CurrentUserContext.Provider value={{ currentUser: viewingUser, setCurrentUser }}>
+    <CurrentUserContext.Provider value={{ currentUser, setCurrentUser }}>
       {children}
     </CurrentUserContext.Provider>
   );

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { CalendarDays, Gift, Image as ImageIcon, Video, Home, Menu, X, Cpu, Camera, UserCircle2, Star, Trophy, Gamepad2, UtensilsCrossed, ShoppingCart, Wallet, Bot, MessageCircle } from 'lucide-react';
+import { CalendarDays, Gift, Image as ImageIcon, Video, Home, Menu, X, Cpu, Camera, UserCircle2, Star, Trophy, Gamepad2, UtensilsCrossed, ShoppingCart, Wallet, Bot, MessageCircle, Settings } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useFamilyMembers } from '@/hooks/use-family';
@@ -25,63 +25,8 @@ const NAV_ITEMS = [
   { name: 'Video Calls', href: '/calls', icon: Video },
 ];
 
-function UserSwitcher() {
-  const { users } = useFamilyMembers();
-  const { currentUser, setCurrentUser } = useCurrentUser();
-
-  // Find the most up-to-date user object (with avatarUrl)
-  const activeUser = users.find(u => u.id === currentUser?.id) || currentUser;
-  const isAdmin = activeUser?.role === 'admin' || activeUser?.role === 'superadmin';
-
-  if (!activeUser) return null;
-
-  return (
-    <div className="mb-6">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-2 mb-3">Viewing As</h3>
-      <div className="flex items-center gap-3 px-2 mb-3">
-        {/* ... avatar ... */}
-        <div className="relative">
-          {activeUser.avatarUrl ? (
-            <Image 
-              src={activeUser.avatarUrl} 
-              alt={activeUser.name} 
-              width={40}
-              height={40}
-              className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:scale-110 active:scale-95 transition-all duration-300"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className={`w-10 h-10 rounded-full ${activeUser.color} flex items-center justify-center border-2 border-white shadow-[0_4px_12px_rgba(0,0,0,0.1)]`}>
-              <UserCircle2 className="w-6 h-6 text-white" />
-            </div>
-          )}
-          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-        </div>
-        <div className="flex flex-col min-w-0">
-          <span className="text-sm font-bold text-slate-900 truncate">{activeUser.name}</span>
-          <span className="text-[10px] font-medium text-slate-500 uppercase tracking-tighter">{activeUser.role}</span>
-        </div>
-      </div>
-      <div className="space-y-2">
-        <select 
-          value={activeUser.id}
-          onChange={(e) => setCurrentUser(e.target.value)}
-          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none cursor-pointer"
-          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
-        >
-          {users.map(u => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
-        {isAdmin && (
-           <div className="text-[10px] text-slate-500 bg-slate-100 p-2 rounded-lg">
-             Family Code: <span className="font-mono font-bold text-slate-800">{activeUser.familyCode || 'N/A'}</span>
-           </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// Only these 6 show on the mobile bottom bar — everything else is in the hamburger
+const BOTTOM_NAV = ['/', '/missions', '/messages', '/meals', '/assistant', '/shopping'];
 
 export function AppNavigationContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -91,10 +36,14 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
 
   const isAbriana = currentUser?.name === 'Abriana';
   const isChild = currentUser?.role === 'child';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
+
+  const settingsActive = pathname === '/settings';
 
   return (
     <div className={`flex flex-col md:flex-row min-h-screen ${isAbriana ? 'bg-pink-50' : 'bg-slate-50'}`}>
       {isAbriana && <HeartTrail />}
+
       {/* Desktop Sidebar */}
       <aside className={`hidden md:flex flex-col w-64 ${isAbriana ? 'bg-pink-50 border-pink-100' : 'bg-white border-r border-slate-200'} sticky top-0 h-screen`}>
         <div className={`p-6 border-b ${isAbriana ? 'border-pink-100' : 'border-slate-100'}`}>
@@ -113,12 +62,12 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href;
             return (
-              <Link 
-                key={item.name} 
+              <Link
+                key={item.name}
                 href={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
-                  isActive 
-                    ? (isAbriana ? 'bg-pink-500 text-white shadow-md' : 'bg-blue-50 text-blue-700 font-medium') 
+                  isActive
+                    ? (isAbriana ? 'bg-pink-500 text-white shadow-md' : 'bg-blue-50 text-blue-700 font-medium')
                     : (isAbriana ? 'text-pink-400 hover:bg-pink-100 hover:text-pink-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900')
                 }`}
               >
@@ -130,44 +79,62 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-100">
+        <div className="p-4 border-t border-slate-100 space-y-3">
+          {/* Settings — admin only */}
+          {isAdmin && (
+            <Link
+              href="/settings"
+              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                settingsActive
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              Settings
+            </Link>
+          )}
+
           <Link
             href="/setup-home"
-            className="w-full flex items-center justify-center gap-2 mb-4 px-3 py-2 text-xs font-semibold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200/60"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200/60"
           >
             <Bot className="w-4 h-4" />
             Setup Your Home (Local AI)
           </Link>
 
-          <button 
+          <button
             onClick={() => {
               if ('Notification' in window) {
-                Notification.requestPermission().then(p => alert(p === 'granted' ? 'Alert notifications enabled for updates!' : 'Notifications blocked.'));
+                Notification.requestPermission().then(p =>
+                  alert(p === 'granted' ? 'Notifications enabled!' : 'Notifications blocked.')
+                );
               }
             }}
-            className="w-full mb-4 px-3 py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors border border-slate-200/60"
+            className="w-full px-3 py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors border border-slate-200/60"
           >
             Enable Device Notifications
           </button>
-          <div className="space-y-4">
+
+          <div className="space-y-4 pt-2">
             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-2 flex items-center justify-between">
               Family Stars <Trophy className="w-3 h-3 text-yellow-500" />
             </h3>
             {users.filter(u => u.role === 'child').map(u => (
-              <motion.div 
-                key={u.id} 
+              <motion.div
+                key={u.id}
                 whileHover={{ x: 5 }}
                 className={`flex items-center justify-between px-3 py-2 rounded-2xl transition-all ${isAbriana ? 'hover:bg-pink-100' : 'hover:bg-slate-50'} group`}
               >
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     {u.avatarUrl ? (
-                      <Image 
-                        src={u.avatarUrl} 
-                        alt={u.name} 
+                      <Image
+                        src={u.avatarUrl}
+                        alt={u.name}
                         width={36}
                         height={36}
-                        className="w-9 h-9 rounded-full object-cover shadow-[0_2px_8px_rgba(0,0,0,0.1)] border-2 border-white group-hover:scale-110 transition-transform" 
+                        className="w-9 h-9 rounded-full object-cover shadow-[0_2px_8px_rgba(0,0,0,0.1)] border-2 border-white group-hover:scale-110 transition-transform"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
@@ -199,26 +166,37 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
           </div>
           <h1 className="font-display font-semibold tracking-tight text-slate-900">Bear House</h1>
         </div>
-        <button 
-          onClick={() => setMobileMenuOpen(true)}
-          className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-        >
-          <Menu className="w-6 h-6" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Settings shortcut in top bar for admin */}
+          {isAdmin && (
+            <Link
+              href="/settings"
+              className={`p-2 rounded-lg transition-colors ${settingsActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              <Settings className="w-5 h-5" />
+            </Link>
+          )}
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+        </div>
       </header>
 
       {/* Mobile Menu Overlay */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileMenuOpen(false)}
               className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50 md:hidden"
             />
-            <motion.div 
+            <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
@@ -227,34 +205,42 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
             >
               <div className="p-4 flex items-center justify-between border-b border-slate-100">
                 <h2 className="font-display font-semibold text-lg">Menu</h2>
-                <button 
+                <button
                   onClick={() => setMobileMenuOpen(false)}
                   className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="p-4 border-b border-slate-100">
-                 <Link
-                   href="/setup-home"
-                   onClick={() => setMobileMenuOpen(false)}
-                   className="w-full flex items-center justify-center gap-2 mt-4 px-3 py-2 text-xs font-semibold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200/60"
-                 >
-                   <Bot className="w-4 h-4" />
-                   Setup Your Home (Local AI)
-                 </Link>
-              </div>
-              <nav className="p-4 space-y-1">
+
+              {/* Admin section at top of mobile menu */}
+              {isAdmin && (
+                <div className="px-4 pt-4 pb-2 border-b border-slate-100">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2 px-1">Admin</p>
+                  <Link
+                    href="/settings"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold ${
+                      settingsActive ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Settings className={`w-5 h-5 ${settingsActive ? 'text-white' : 'text-slate-500'}`} />
+                    Settings
+                  </Link>
+                </div>
+              )}
+
+              <nav className="flex-1 overflow-y-auto p-4 space-y-1">
                 {NAV_ITEMS.map((item) => {
                   const isActive = pathname === item.href;
                   return (
-                    <Link 
-                      key={item.name} 
+                    <Link
+                      key={item.name}
                       href={item.href}
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                        isActive 
-                          ? 'bg-blue-50 text-blue-700 font-medium' 
+                        isActive
+                          ? 'bg-blue-50 text-blue-700 font-medium'
                           : 'text-slate-600 hover:bg-slate-50'
                       }`}
                     >
@@ -264,6 +250,17 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
                   );
                 })}
               </nav>
+
+              <div className="p-4 border-t border-slate-100">
+                <Link
+                  href="/setup-home"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200/60"
+                >
+                  <Bot className="w-4 h-4" />
+                  Setup Your Home (Local AI)
+                </Link>
+              </div>
             </motion.div>
           </>
         )}
@@ -274,17 +271,17 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
         {children}
       </div>
 
-      {/* Mobile Bottom Navigation */}
+      {/* Mobile Bottom Navigation — 6 core items only */}
       <nav className={`md:hidden fixed bottom-0 inset-x-0 ${isAbriana ? 'bg-pink-100 border-pink-200' : 'bg-white border-t border-slate-200'} flex items-center justify-around pb-safe z-40`}>
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter(item => BOTTOM_NAV.includes(item.href)).map((item) => {
           const isActive = pathname === item.href;
           return (
-            <Link 
-              key={item.name} 
+            <Link
+              key={item.name}
               href={item.href}
               className={`flex flex-col items-center justify-center w-full py-2.5 space-y-1 transition-colors ${
-                isActive 
-                  ? (isAbriana ? 'text-pink-600' : 'text-blue-600') 
+                isActive
+                  ? (isAbriana ? 'text-pink-600' : 'text-blue-600')
                   : (isAbriana ? 'text-pink-400 hover:text-pink-600' : 'text-slate-500 hover:text-slate-900')
               }`}
             >
@@ -307,4 +304,3 @@ export function AppNavigation({ children }: { children: React.ReactNode }) {
     </CurrentUserProvider>
   );
 }
-

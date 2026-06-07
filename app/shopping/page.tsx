@@ -57,7 +57,7 @@ export default function ShoppingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+    <div className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6 pb-24">
       <div className="max-w-lg mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">

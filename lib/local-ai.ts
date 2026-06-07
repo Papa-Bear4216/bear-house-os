@@ -53,3 +53,23 @@ export async function runLocalAI(prompt: string, options?: { systemInstruction?:
   });
   return response.text ?? '';
 }
+
+export async function analyzeImageWithAI(imageBase64: string, prompt: string): Promise<string> {
+  if (!GEMINI_API_KEY) {
+    throw new Error('Set NEXT_PUBLIC_GEMINI_API_KEY to use the scanner AI.');
+  }
+  const base64Data = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.0-flash',
+    contents: [
+      {
+        parts: [
+          { inlineData: { mimeType: 'image/jpeg', data: base64Data } },
+          { text: prompt },
+        ],
+      },
+    ],
+  });
+  return response.text ?? '';
+}

@@ -119,7 +119,7 @@ export default function BudgetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+    <div className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6 pb-24">
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}

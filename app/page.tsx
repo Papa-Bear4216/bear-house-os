@@ -16,7 +16,10 @@ import { useCurrentUser } from '@/hooks/use-current-user';
 import { useDashboard, WIDGET_LABELS, type WidgetId } from '@/hooks/use-dashboard';
 import { useMeals, getWeekStart } from '@/hooks/use-meals';
 import { useShopping } from '@/hooks/use-shopping';
+import { useSettings } from '@/hooks/use-settings';
 import { askHermes } from '@/lib/hermes';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { trackUsage, getHermesMemory, buildMemorySummary } from '@/lib/usage-tracker';
 import { getRecipeById } from '@/lib/recipes';
 import { HeartTrail } from '@/components/HeartTrail';
@@ -90,6 +93,7 @@ function DailyBriefWidget() {
 function MyTasksWidget() {
   const { tasks, updateTaskStatus } = useTasks();
   const { currentUser } = useCurrentUser();
+  const { settings } = useSettings();
   const today = format(new Date(), 'yyyy-MM-dd');
 
   const myTasks = tasks
@@ -103,6 +107,13 @@ function MyTasksWidget() {
     })
     .slice(0, 5);
 
+  async function complete(taskId: string, pts: number) {
+    await updateTaskStatus(taskId, 'done');
+    if (settings.points.autoAward && db && currentUser?.id) {
+      await updateDoc(doc(db, 'users', currentUser.id), { points: (currentUser.points ?? 0) + pts });
+    }
+  }
+
   return (
     <WidgetCard icon={<CheckCircle2 className="w-4 h-4 text-green-600" />} title="My Tasks" accent="bg-green-100"
       action={<Link href="/missions" className="text-xs text-green-600 font-bold hover:underline">See all</Link>}
@@ -115,7 +126,7 @@ function MyTasksWidget() {
             const overdue = task.date && task.date < today;
             return (
               <div key={task.id} className="flex items-center gap-2.5">
-                <button onClick={() => updateTaskStatus(task.id, 'done')} className="flex-shrink-0">
+                <button onClick={() => complete(task.id, task.pointsValue ?? settings.points.defaultTaskPoints)} className="flex-shrink-0">
                   <Circle className="w-4 h-4 text-slate-300 hover:text-green-500 transition-colors" />
                 </button>
                 <div className="flex-1 min-w-0">
@@ -141,11 +152,20 @@ function MyTasksWidget() {
 function FamilyTasksWidget() {
   const { tasks, updateTaskStatus } = useTasks();
   const { users } = useFamilyMembers();
+  const { settings } = useSettings();
   const today = format(new Date(), 'yyyy-MM-dd');
 
   const urgentTasks = tasks
     .filter(t => t.status !== 'done' && t.date && t.date <= today)
     .slice(0, 6);
+
+  async function complete(taskId: string, assigneeId: string, pts: number) {
+    await updateTaskStatus(taskId, 'done');
+    if (!settings.points.autoAward || !db || !assigneeId) return;
+    const user = users.find(u => u.id === assigneeId);
+    if (!user) return;
+    await updateDoc(doc(db, 'users', assigneeId), { points: (user.points ?? 0) + pts });
+  }
 
   return (
     <WidgetCard icon={<Users className="w-4 h-4 text-blue-600" />} title="Family Tasks" accent="bg-blue-100"
@@ -160,7 +180,7 @@ function FamilyTasksWidget() {
             const overdue = task.date && task.date < today;
             return (
               <div key={task.id} className="flex items-center gap-2">
-                <button onClick={() => updateTaskStatus(task.id, 'done')}>
+                <button onClick={() => complete(task.id, task.assigneeId, task.pointsValue ?? settings.points.defaultTaskPoints)}>
                   <Circle className="w-3.5 h-3.5 text-slate-300 hover:text-green-500" />
                 </button>
                 <p className={`flex-1 text-sm truncate ${overdue ? 'text-red-600 font-medium' : 'text-slate-700'}`}>{task.title}</p>
@@ -266,12 +286,20 @@ function BudgetPulseWidget() {
 function MyMissionsWidget() {
   const { tasks, updateTaskStatus } = useTasks();
   const { currentUser } = useCurrentUser();
+  const { settings } = useSettings();
 
   const missions = tasks
     .filter(t => t.assigneeId === currentUser?.id && t.status !== 'done')
     .slice(0, 3);
 
   const completed = tasks.filter(t => t.assigneeId === currentUser?.id && t.status === 'done').length;
+
+  async function complete(taskId: string, pts: number) {
+    await updateTaskStatus(taskId, 'done');
+    if (settings.points.autoAward && db && currentUser?.id) {
+      await updateDoc(doc(db, 'users', currentUser.id), { points: (currentUser.points ?? 0) + pts });
+    }
+  }
 
   return (
     <WidgetCard icon={<Star className="w-4 h-4 text-yellow-500" />} title="My Missions" accent="bg-yellow-100"
@@ -290,7 +318,7 @@ function MyMissionsWidget() {
       <div className="space-y-1.5">
         {missions.map(m => (
           <div key={m.id} className="flex items-center gap-2">
-            <button onClick={() => updateTaskStatus(m.id, 'done')}>
+            <button onClick={() => complete(m.id, m.pointsValue ?? settings.points.defaultTaskPoints)}>
               <Circle className="w-3.5 h-3.5 text-slate-300 hover:text-yellow-500" />
             </button>
             <p className="text-sm text-slate-700 flex-1 truncate">{m.title}</p>

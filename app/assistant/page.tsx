@@ -1,13 +1,18 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Sparkles, Loader2, Cpu } from 'lucide-react';
 import { useTasks } from '@/hooks/use-tasks';
 import { useEvents } from '@/hooks/use-events';
 import { useFamilyMembers } from '@/hooks/use-family';
+import { useShopping } from '@/hooks/use-shopping';
+import { useMeals, getWeekStart } from '@/hooks/use-meals';
+import { useMessages } from '@/hooks/use-messages';
+import { useCurrentUser } from '@/hooks/use-current-user';
 import { format } from 'date-fns';
 import { askHermes, type HermesMessage } from '@/lib/hermes';
 import { trackUsage, trackHermesQuery, getHermesMemory, buildMemorySummary } from '@/lib/usage-tracker';
+import { useSettings } from '@/hooks/use-settings';
 
 const QUICK_PROMPTS = [
   "Brief me on today",
@@ -16,10 +21,43 @@ const QUICK_PROMPTS = [
   "Suggest a family activity for the weekend",
 ];
 
+const HERMES_SYSTEM = `You are Hermes, the Bear House Family OS AI. You have FULL control over this family's data. You can read and write everything.
+
+When you need to take an action, output a JSON block like this (you can combine multiple actions):
+\`\`\`json
+{"actions":[
+  {"type":"add_task","args":{"title":"...","assigneeId":"<userId>","date":"YYYY-MM-DD","pointsValue":15,"status":"todo"}},
+  {"type":"complete_task","args":{"taskId":"<id>"}},
+  {"type":"delete_task","args":{"taskId":"<id>"}},
+  {"type":"add_event","args":{"title":"...","userId":"<userId>","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM"}},
+  {"type":"add_user","args":{"name":"...","role":"child","color":"bg-blue-500"}},
+  {"type":"add_shopping_item","args":{"name":"...","quantity":1,"unit":"item","category":"other"}},
+  {"type":"send_message","args":{"text":"..."}},
+  {"type":"update_feature","args":{"feature":"showBudget|showScanner|showGallery|showCalls|showMap|showRewards|showGames","value":true}},
+  {"type":"update_points","args":{"autoAward":true,"defaultTaskPoints":10,"easyPoints":15,"mediumPoints":30,"hardPoints":50}}
+]}
+\`\`\`
+
+Shopping categories: produce, meat, dairy, bakery, pantry, frozen, beverages, household, personal-care, other
+Task status options: todo, pending, done
+Feature keys: showBudget, showScanner, showGallery, showCalls, showMap, showRewards, showGames
+
+update_feature and update_points require the user to be admin or superadmin — only apply these when Mike or Gwen explicitly asks.
+
+When you respond to the user, ALWAYS output the JSON block first if you're taking actions, then your conversational reply. If not taking any actions, just reply conversationally.
+
+You know this family deeply. Be warm, proactive, and treat reducing their cognitive load as your primary mission.`;
+
 export default function AssistantPage() {
-  const { tasks, addTask } = useTasks();
+  const { tasks, addTask, updateTaskStatus, deleteTask } = useTasks();
   const { events, addEvent } = useEvents();
   const { users, addUser } = useFamilyMembers();
+  const { items: shoppingItems, addItem: addShoppingItem } = useShopping();
+  const weekStart = useMemo(() => getWeekStart(), []);
+  const { meals } = useMeals(weekStart);
+  const { currentUser } = useCurrentUser();
+  const { sendMessage } = useMessages(currentUser?.familyCode);
+  const { updateFeatureSettings, updatePointSettings } = useSettings();
 
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<Array<{ role: 'user' | 'assistant'; text: string; model?: string }>>([]);
@@ -50,24 +88,17 @@ export default function AssistantPage() {
       const memory = await getHermesMemory();
       const context = {
         date: format(new Date(), 'yyyy-MM-dd HH:mm EEEE'),
+        currentUser,
         users,
         tasks,
         events,
+        meals,
+        shopping: shoppingItems,
         usageMemory: memory ? buildMemorySummary(memory) : undefined,
       };
 
-      const systemOverride = `You are Hermes, the Bear House Family OS AI. You know this family deeply.
+      const { content, model } = await askHermes(messages, context, HERMES_SYSTEM);
 
-When the user asks you to ADD tasks, events, or family members, output a JSON block like:
-\`\`\`json
-{"actions":[{"type":"add_task","args":{"title":"...","assigneeId":"...","date":"YYYY-MM-DD","pointsValue":10}}]}
-\`\`\`
-Action types: add_task (title, assigneeId, date, pointsValue), add_event (title, userId, date, startTime HH:MM, endTime HH:MM), add_user (name, role, color like "bg-red-500", points).
-Only output JSON when creating things. Otherwise reply conversationally and warmly.`;
-
-      const { content, model } = await askHermes(messages, context, systemOverride);
-
-      // Parse any action JSON
       let replyText = content;
       const jsonMatch = content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
       if (jsonMatch) {
@@ -76,22 +107,73 @@ Only output JSON when creating things. Otherwise reply conversationally and warm
           let count = 0;
           if (data.actions && Array.isArray(data.actions)) {
             for (const action of data.actions) {
-              if (action.type === 'add_task') { addTask(action.args); count++; }
-              else if (action.type === 'add_event') { addEvent(action.args); count++; }
-              else if (action.type === 'add_user') {
-                addUser({ id: crypto.randomUUID(), name: action.args.name ?? 'New Member', role: action.args.role ?? 'child', color: action.args.color ?? 'bg-indigo-500', points: action.args.points ?? 0 });
+              if (action.type === 'add_task') {
+                await addTask({ ...action.args, completed: action.args.status === 'done', status: action.args.status ?? 'todo' });
                 count++;
+              } else if (action.type === 'complete_task') {
+                await updateTaskStatus(action.args.taskId, 'done');
+                count++;
+              } else if (action.type === 'delete_task') {
+                await deleteTask(action.args.taskId);
+                count++;
+              } else if (action.type === 'add_event') {
+                await addEvent(action.args);
+                count++;
+              } else if (action.type === 'add_user') {
+                await addUser({
+                  id: crypto.randomUUID(),
+                  name: action.args.name ?? 'New Member',
+                  role: action.args.role ?? 'child',
+                  color: action.args.color ?? 'bg-indigo-500',
+                  points: action.args.points ?? 0,
+                });
+                count++;
+              } else if (action.type === 'add_shopping_item') {
+                await addShoppingItem({
+                  name: action.args.name,
+                  quantity: action.args.quantity ?? 1,
+                  unit: action.args.unit ?? 'item',
+                  category: action.args.category ?? 'other',
+                  checked: false,
+                  addedManually: true,
+                });
+                count++;
+              } else if (action.type === 'send_message' && currentUser) {
+                await sendMessage({
+                  text: action.args.text,
+                  userId: currentUser.id,
+                  userName: `Hermes (via ${currentUser.name})`,
+                  userColor: 'bg-purple-500',
+                  avatarUrl: currentUser.avatarUrl,
+                });
+                count++;
+              } else if (action.type === 'update_feature') {
+                const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
+                if (isAdmin) {
+                  await updateFeatureSettings({ [action.args.feature]: action.args.value });
+                  count++;
+                }
+              } else if (action.type === 'update_points') {
+                const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
+                if (isAdmin) {
+                  await updatePointSettings(action.args);
+                  count++;
+                }
               }
             }
           }
-          replyText = content.replace(/```json[\s\S]*?```/, '').trim() || `Done! Added ${count} item${count !== 1 ? 's' : ''}.`;
+          replyText = content.replace(/```json[\s\S]*?```/, '').trim() ||
+            `Done! Completed ${count} action${count !== 1 ? 's' : ''}.`;
         } catch { /* leave replyText as-is */ }
       }
 
       setHistory(prev => [...prev, { role: 'assistant', text: replyText, model }]);
     } catch (err) {
       console.error(err);
-      setHistory(prev => [...prev, { role: 'assistant', text: "I'm having trouble connecting right now. Set OPENROUTER_API_KEY in your Vercel env vars to use Hermes." }]);
+      setHistory(prev => [...prev, {
+        role: 'assistant',
+        text: "I'm having trouble connecting right now. Make sure ANTHROPIC_API_KEY or GEMINI_API_KEY is set in your Vercel env vars.",
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -106,7 +188,7 @@ Only output JSON when creating things. Otherwise reply conversationally and warm
         </div>
         <div>
           <h1 className="font-display text-2xl font-semibold text-slate-900 leading-none mb-1">Hermes</h1>
-          <p className="text-slate-500 text-xs sm:text-sm leading-none">Your family AI — learns, understands, anticipates</p>
+          <p className="text-slate-500 text-xs sm:text-sm leading-none">Full control — tasks, events, shopping, messages, and more</p>
         </div>
       </header>
 
@@ -168,7 +250,7 @@ Only output JSON when creating things. Otherwise reply conversationally and warm
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="Ask Hermes anything about your family…"
+            placeholder="Ask Hermes anything — or tell him what to do…"
             className="w-full pl-5 pr-14 py-4 rounded-full border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 shadow-sm bg-white"
           />
           <button
