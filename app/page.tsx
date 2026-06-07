@@ -342,7 +342,7 @@ function QuickAddWidget() {
     e.preventDefault();
     if (!input.trim()) return;
     if (mode === 'task') {
-      addTask({ title: input, assigneeId: currentUser?.id ?? '1', date: format(new Date(), 'yyyy-MM-dd'), pointsValue: 10, status: 'pending' });
+      addTask({ title: input, assigneeId: currentUser?.id ?? '1', date: format(new Date(), 'yyyy-MM-dd'), pointsValue: 10, status: 'pending', completed: false });
     } else {
       addEvent({ title: input, userId: currentUser?.id ?? '1', date: new Date().toISOString(), startTime: '', endTime: '' });
     }
