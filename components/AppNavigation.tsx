@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { CalendarDays, Gift, Image as ImageIcon, Video, Home, Menu, X, Bot, Camera, UserCircle2, Star, Trophy, Gamepad2 } from 'lucide-react';
+import { CalendarDays, Gift, Image as ImageIcon, Video, Home, Menu, X, Cpu, Camera, UserCircle2, Star, Trophy, Gamepad2, UtensilsCrossed, ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useFamilyMembers } from '@/hooks/use-family';
@@ -13,7 +13,9 @@ import { HeartTrail } from './HeartTrail';
 const NAV_ITEMS = [
   { name: 'Calendar', href: '/', icon: CalendarDays },
   { name: 'Missions', href: '/missions', icon: Gamepad2 },
-  { name: 'Assistant', href: '/assistant', icon: Bot },
+  { name: 'Meals', href: '/meals', icon: UtensilsCrossed },
+  { name: 'Shopping', href: '/shopping', icon: ShoppingCart },
+  { name: 'Hermes', href: '/assistant', icon: Cpu },
   { name: 'Scanner', href: '/scanner', icon: Camera },
   { name: 'Map', href: '/map', icon: Home },
   { name: 'Rewards', href: '/rewards', icon: Gift },
