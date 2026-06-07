@@ -250,7 +250,7 @@ export default function MealsPage() {
                   </button>
                 ))}
                 {filteredRecipes.length === 0 && (
-                  <div className="col-span-2 py-8 text-center text-slate-400 text-sm">No recipes found for "{search}"</div>
+                  <div className="col-span-2 py-8 text-center text-slate-400 text-sm">No recipes found for &quot;{search}&quot;</div>
                 )}
               </div>
             </motion.div>

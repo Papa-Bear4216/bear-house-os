@@ -312,7 +312,7 @@ export default function LoginPage() {
                       Welcome to Bear House!
                     </h2>
                     <p className="text-slate-600 text-sm font-medium leading-relaxed">
-                      Let's set up your family system. Would you like to create a new family unit or join an existing family using a code?
+                      Let&apos;s set up your family system. Would you like to create a new family unit or join an existing family using a code?
                     </p>
 
                     <div className="grid grid-cols-1 gap-4">

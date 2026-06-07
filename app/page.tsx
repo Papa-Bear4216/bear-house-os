@@ -80,7 +80,7 @@ function DailyBriefWidget() {
         </div>
       ) : (
         <button onClick={fetchBrief} className="text-sm text-purple-500 font-bold hover:underline">
-          Get today's brief →
+          Get today&apos;s brief →
         </button>
       )}
     </WidgetCard>
@@ -152,7 +152,7 @@ function FamilyTasksWidget() {
       action={<Link href="/missions" className="text-xs text-blue-600 font-bold hover:underline">All tasks</Link>}
     >
       {urgentTasks.length === 0 ? (
-        <p className="text-sm text-slate-400">No urgent tasks — family's on track 🐻</p>
+        <p className="text-sm text-slate-400">No urgent tasks — family&apos;s on track 🐻</p>
       ) : (
         <div className="space-y-2">
           {urgentTasks.map(task => {

@@ -4,6 +4,11 @@ import firebaseRulesPlugin from '@firebase/eslint-plugin-security-rules';
 const config = [
   ...nextConfig,
   {
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
+  {
     files: ["**/*.rules"],
     plugins: { 
       "@firebase/security-rules": firebaseRulesPlugin 

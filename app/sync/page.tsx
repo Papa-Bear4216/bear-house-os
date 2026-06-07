@@ -69,7 +69,7 @@ export default function SyncPage() {
         {tab === 'export' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
             <h2 className="font-semibold text-slate-900">Step 1: Copy your sync code</h2>
-            <p className="text-sm text-slate-500">Tap "Regenerate" to get a fresh snapshot, then copy and send the code to the other device (via text, email, or paste it directly).</p>
+            <p className="text-sm text-slate-500">Tap &quot;Regenerate&quot; to get a fresh snapshot, then copy and send the code to the other device (via text, email, or paste it directly).</p>
 
             <textarea
               readOnly
@@ -131,7 +131,7 @@ export default function SyncPage() {
 
         <div className="bg-slate-100 rounded-xl p-4 text-xs text-slate-500 space-y-1">
           <p className="font-semibold text-slate-700">How it works</p>
-          <p>All data lives on your device. To sync with another family member's device, export your sync code and have them paste it on their device. Changes are merged, not overwritten.</p>
+          <p>All data lives on your device. To sync with another family member&apos;s device, export your sync code and have them paste it on their device. Changes are merged, not overwritten.</p>
         </div>
       </div>
     </div>
