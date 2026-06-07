@@ -436,7 +436,7 @@ const WIDGET_COMPONENTS: Record<WidgetId, React.FC> = {
 
 export default function Home() {
   const { currentUser } = useCurrentUser();
-  const isParent = currentUser?.role === 'admin' || currentUser?.role === 'superadmin' || currentUser?.role === 'parent';
+  const isParent = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
 
   const { enabledWidgets, config, toggleWidget, moveWidget } = useDashboard(
     currentUser?.id ?? 'default',
