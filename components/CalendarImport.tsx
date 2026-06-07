@@ -96,7 +96,6 @@ export default function CalendarImport() {
     const toImport = events.filter(e => selectedEvents.has(e.id));
     for (const e of toImport) {
       addEvent({
-        id: e.id,
         title: e.title,
         userId: assigneeId,
         date: e.date,
