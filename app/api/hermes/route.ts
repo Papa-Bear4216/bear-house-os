@@ -20,36 +20,27 @@ export async function POST(req: NextRequest) {
 Current family context:
 ${JSON.stringify(context ?? {}, null, 2)}`;
 
-  // Try OpenRouter with Hermes 3
-  const openRouterKey = process.env.OPENROUTER_API_KEY;
-  if (openRouterKey) {
+  // Primary: Claude (Anthropic)
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (anthropicKey) {
     try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${openRouterKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://bearhouseos.vercel.app',
-          'X-Title': 'Bear House Family OS',
-        },
-        body: JSON.stringify({
-          model: 'nousresearch/hermes-3-llama-3.1-405b:free',
-          messages: [{ role: 'system', content: systemContent }, ...messages],
-          temperature: 0.72,
-          max_tokens: 1024,
-        }),
+      const Anthropic = (await import('@anthropic-ai/sdk')).default;
+      const client = new Anthropic({ apiKey: anthropicKey });
+
+      const response = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: systemContent,
+        messages: messages.map((m: { role: string; content: string }) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const content = data.choices?.[0]?.message?.content ?? '';
-        return NextResponse.json({ content, model: 'hermes-3-405b' });
-      }
-
-      // If free tier exhausted, fall through to Gemini
-      console.warn('OpenRouter Hermes unavailable, falling back to Gemini');
+      const content = response.content[0].type === 'text' ? response.content[0].text : '';
+      return NextResponse.json({ content, model: 'claude-haiku' });
     } catch (e) {
-      console.error('OpenRouter error:', e);
+      console.error('Claude error:', e);
     }
   }
 
@@ -74,5 +65,8 @@ ${JSON.stringify(context ?? {}, null, 2)}`;
     }
   }
 
-  return NextResponse.json({ error: 'No AI provider configured. Set OPENROUTER_API_KEY or GEMINI_API_KEY.' }, { status: 503 });
+  return NextResponse.json(
+    { error: 'No AI provider configured. Set ANTHROPIC_API_KEY or GEMINI_API_KEY in Vercel env vars.' },
+    { status: 503 },
+  );
 }
