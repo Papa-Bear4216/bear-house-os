@@ -7,6 +7,7 @@ import { useEvents } from '@/hooks/use-events';
 import { useFamilyMembers } from '@/hooks/use-family';
 import { format } from 'date-fns';
 import { askHermes, type HermesMessage } from '@/lib/hermes';
+import { trackUsage, trackHermesQuery, getHermesMemory, buildMemorySummary } from '@/lib/usage-tracker';
 
 const QUICK_PROMPTS = [
   "Brief me on today",
@@ -23,6 +24,8 @@ export default function AssistantPage() {
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<Array<{ role: 'user' | 'assistant'; text: string; model?: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => { trackUsage('assistant'); }, []);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,11 +46,14 @@ export default function AssistantPage() {
         { role: 'user', content: userMsg },
       ];
 
+      trackHermesQuery(userMsg);
+      const memory = await getHermesMemory();
       const context = {
         date: format(new Date(), 'yyyy-MM-dd HH:mm EEEE'),
         users,
         tasks,
         events,
+        usageMemory: memory ? buildMemorySummary(memory) : undefined,
       };
 
       const systemOverride = `You are Hermes, the Bear House Family OS AI. You know this family deeply.
