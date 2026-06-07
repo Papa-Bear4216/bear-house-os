@@ -1,14 +1,23 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { MapContainer, ImageOverlay, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useFamilyMembers } from '@/hooks/use-family';
 import { useTasks } from '@/hooks/use-tasks';
-import { useLocalStorage } from 'react-use';
 import { UploadCloud, CheckCircle2, MapPin } from 'lucide-react';
+
+function useLocalStorage<T>(key: string, initialValue: T): [T, (v: T) => void, () => void] {
+  const [value, setValue] = useState<T>(() => {
+    if (typeof window === 'undefined') return initialValue;
+    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : initialValue; } catch { return initialValue; }
+  });
+  const set = useCallback((v: T) => { setValue(v); try { localStorage.setItem(key, JSON.stringify(v)); } catch {} }, [key]);
+  const remove = useCallback(() => { setValue(initialValue); try { localStorage.removeItem(key); } catch {} }, [key, initialValue]);
+  return [value, set, remove];
+}
 
 const DefaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
