@@ -1,8 +1,11 @@
 'use client';
 
-import { Gift, Star, DollarSign, Video, Film, Moon, IceCream, PartyPopper } from 'lucide-react';
+import { useState } from 'react';
+import { Gift, Star, DollarSign, Video, Film, Moon, IceCream, PartyPopper, X, Check } from 'lucide-react';
 import Image from 'next/image';
+import { motion, AnimatePresence } from 'motion/react';
 import { useFamilyMembers } from '@/hooks/use-family';
+import { audioSynth, triggerConfetti } from '@/lib/audio';
 
 const REWARDS = [
   { id: 1, title: 'Extra Screen Time (30m)', cost: 50, icon: Video, color: 'bg-purple-100 text-purple-600' },
@@ -17,15 +20,31 @@ export default function RewardsPage() {
   const { users, updatePoints } = useFamilyMembers();
   const childrenFilter = users.filter(u => u.role === 'child');
 
-  const handleClaim = (cost: number) => {
-    const childId = window.prompt("Which child is reclaiming this? (Enter 3 for Julia, 4 for Abriana)");
-    if (!childId) return;
-    const child = users.find(u => u.id === childId);
-    if (!child) return alert("Invalid child ID");
-    if (child.points < cost) return alert("Not enough points!");
-    
-    updatePoints(child.id, -cost);
-    alert(`Reward claimed for ${child.name}!`);
+  const [claimModal, setClaimModal] = useState<{cost: number, title: string} | null>(null);
+  const [selectedChild, setSelectedChild] = useState<string>('');
+  const [claimSuccess, setClaimSuccess] = useState<string | null>(null);
+
+  const handleClaim = (cost: number, title: string) => {
+    setClaimModal({ cost, title });
+    setSelectedChild('');
+    setClaimSuccess(null);
+  };
+
+  const confirmClaim = () => {
+    if (!claimModal || !selectedChild) return;
+    const child = users.find(u => u.id === selectedChild);
+    if (!child || child.points < claimModal.cost) return;
+
+    updatePoints(child.id, -claimModal.cost);
+    setClaimSuccess(child.name);
+    audioSynth.playLevelUp();
+    triggerConfetti();
+  };
+
+  const closeModal = () => {
+    setClaimModal(null);
+    setSelectedChild('');
+    setClaimSuccess(null);
   };
 
   return (
@@ -81,7 +100,7 @@ export default function RewardsPage() {
             {REWARDS.map(reward => (
               <button 
                 key={reward.id}
-                onClick={() => handleClaim(reward.cost)}
+                onClick={() => handleClaim(reward.cost, reward.title)}
                 className="group p-6 bg-white rounded-3xl border border-slate-200/60 shadow-sm hover:border-slate-300 transition-all text-left flex flex-col items-start gap-4 active:scale-95"
               >
                 <div className={`p-4 rounded-2xl ${reward.color}`}>
@@ -99,6 +118,161 @@ export default function RewardsPage() {
           </div>
         </section>
       </div>
+
+      {/* Claim Modal */}
+      <AnimatePresence>
+        {claimModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+            onClick={closeModal}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="bg-white rounded-2xl border-4 border-slate-900 shadow-[8px_8px_0_#1e293b] w-full max-w-md overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-5 border-b-4 border-slate-900 bg-[#facc15]">
+                <h2 className="font-display font-black text-lg uppercase tracking-wider text-slate-900">
+                  {claimSuccess ? 'Claimed!' : 'Claim Reward'}
+                </h2>
+                <button
+                  onClick={closeModal}
+                  className="p-1.5 rounded-xl border-2 border-slate-900 bg-white hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-900" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-5">
+                {claimSuccess ? (
+                  /* Success State */
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-center py-4 space-y-4"
+                  >
+                    <div className="mx-auto w-16 h-16 rounded-full bg-[#ccff00] border-4 border-slate-900 flex items-center justify-center shadow-[4px_4px_0_#1e293b]">
+                      <Check className="w-8 h-8 text-slate-900" strokeWidth={3} />
+                    </div>
+                    <div>
+                      <p className="font-display font-black text-xl text-slate-900 uppercase tracking-wider">
+                        Nice one!
+                      </p>
+                      <p className="text-slate-600 mt-1">
+                        <span className="font-semibold">{claimModal.title}</span> claimed for{' '}
+                        <span className="font-semibold">{claimSuccess}</span>!
+                      </p>
+                    </div>
+                    <button
+                      onClick={closeModal}
+                      className="mt-2 px-6 py-3 rounded-2xl border-4 border-slate-900 bg-[#ccff00] font-display font-black uppercase tracking-wider text-sm text-slate-900 shadow-[4px_4px_0_#1e293b] hover:shadow-[2px_2px_0_#1e293b] hover:translate-x-[2px] hover:translate-y-[2px] transition-all active:shadow-none active:translate-x-[4px] active:translate-y-[4px]"
+                    >
+                      Done
+                    </button>
+                  </motion.div>
+                ) : (
+                  /* Selection State */
+                  <>
+                    {/* Reward being claimed */}
+                    <div className="px-4 py-3 rounded-xl bg-slate-100 border-2 border-slate-200">
+                      <p className="text-sm text-slate-500 font-medium">Redeeming</p>
+                      <p className="font-display font-semibold text-slate-900">{claimModal.title}</p>
+                      <div className="flex items-center gap-1.5 mt-1 text-amber-500 font-semibold text-sm">
+                        <Star className="w-3.5 h-3.5 fill-current" />
+                        <span>{claimModal.cost} pts</span>
+                      </div>
+                    </div>
+
+                    {/* Child selection */}
+                    <div>
+                      <p className="font-display font-black text-sm uppercase tracking-wider text-slate-700 mb-3">
+                        Who&apos;s claiming?
+                      </p>
+                      <div className="space-y-2">
+                        {childrenFilter.map(child => {
+                          const hasEnough = child.points >= claimModal.cost;
+                          const isSelected = selectedChild === child.id;
+                          return (
+                            <button
+                              key={child.id}
+                              onClick={() => hasEnough && setSelectedChild(child.id)}
+                              disabled={!hasEnough}
+                              className={`w-full flex items-center gap-3 p-3 rounded-2xl border-4 transition-all text-left ${
+                                isSelected
+                                  ? 'border-slate-900 bg-[#ccff00] shadow-[4px_4px_0_#1e293b]'
+                                  : hasEnough
+                                  ? 'border-slate-200 bg-white hover:border-slate-400 hover:shadow-sm'
+                                  : 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
+                              }`}
+                            >
+                              {child.avatarUrl ? (
+                                <Image
+                                  src={child.avatarUrl}
+                                  alt={child.name}
+                                  width={44}
+                                  height={44}
+                                  className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-sm"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className={`w-11 h-11 rounded-full ${child.color} flex items-center justify-center text-white font-bold text-lg shadow-inner`}>
+                                  {child.name[0]}
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-display font-semibold text-slate-900">{child.name}</p>
+                                <div className="flex items-center gap-1.5 text-sm">
+                                  <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                                  <span className={hasEnough ? 'text-slate-600' : 'text-red-500 font-medium'}>
+                                    {child.points} pts {!hasEnough && '(not enough)'}
+                                  </span>
+                                </div>
+                              </div>
+                              {isSelected && (
+                                <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center">
+                                  <Check className="w-4 h-4 text-[#ccff00]" strokeWidth={3} />
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-3 pt-1">
+                      <button
+                        onClick={closeModal}
+                        className="flex-1 px-4 py-3 rounded-2xl border-4 border-slate-900 bg-white font-display font-black uppercase tracking-wider text-sm text-slate-900 shadow-[4px_4px_0_#1e293b] hover:shadow-[2px_2px_0_#1e293b] hover:translate-x-[2px] hover:translate-y-[2px] transition-all active:shadow-none active:translate-x-[4px] active:translate-y-[4px]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={confirmClaim}
+                        disabled={!selectedChild}
+                        className={`flex-1 px-4 py-3 rounded-2xl border-4 border-slate-900 font-display font-black uppercase tracking-wider text-sm transition-all ${
+                          selectedChild
+                            ? 'bg-[#ccff00] text-slate-900 shadow-[4px_4px_0_#1e293b] hover:shadow-[2px_2px_0_#1e293b] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px]'
+                            : 'bg-slate-200 text-slate-400 shadow-[4px_4px_0_#94a3b8] cursor-not-allowed'
+                        }`}
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

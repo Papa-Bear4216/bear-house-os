@@ -1,30 +1,55 @@
-export async function checkLocalAIAvailability() {
-  if (typeof window !== 'undefined' && 'ai' in window && 'languageModel' in (window as any).ai) {
-    try {
-      const capabilities = await (window as any).ai.languageModel.capabilities();
-      if (capabilities.available === 'readily') {
-        return { available: true, status: 'readily', message: 'Local AI is ready.' };
-      }
-      if (capabilities.available === 'after-download') {
-        return { available: false, status: 'after-download', message: 'Local AI requires downloading a local model.' };
-      }
-      return { available: false, status: capabilities.available, message: `Local AI status: ${capabilities.available}` };
-    } catch (e) {
-       return { available: false, status: 'error', message: 'Error checking Local AI capabilities.' };
-    }
+import { GoogleGenAI } from '@google/genai';
+
+const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+
+async function hasChromeLocalAI(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  if (!('ai' in window) || !('languageModel' in (window as any).ai)) return false;
+  try {
+    const caps = await (window as any).ai.languageModel.capabilities();
+    return caps.available === 'readily';
+  } catch {
+    return false;
   }
-  return { available: false, status: 'missing', message: 'Prompt API not found. Please enable #prompt-api-for-gemini-nano in Chrome flags.' };
+}
+
+export async function checkLocalAIAvailability() {
+  if (await hasChromeLocalAI()) {
+    return { available: true, status: 'readily', message: 'On-device Gemini Nano is ready.' };
+  }
+  if (GEMINI_API_KEY) {
+    return { available: true, status: 'gemini-api', message: 'Gemini API is available.' };
+  }
+  return {
+    available: false,
+    status: 'missing',
+    message: 'No AI configured. Set NEXT_PUBLIC_GEMINI_API_KEY or enable the Chrome Prompt API (chrome://flags/#prompt-api-for-gemini-nano).',
+  };
 }
 
 export async function runLocalAI(prompt: string, options?: { systemInstruction?: string }): Promise<string> {
-  const { available } = await checkLocalAIAvailability();
-  if (!available) {
-    throw new Error('Local AI is not available on this device/browser.');
+  // Prefer on-device Gemini Nano when available
+  if (await hasChromeLocalAI()) {
+    const session = await (window as any).ai.languageModel.create({
+      systemPrompt: options?.systemInstruction,
+    });
+    return await session.prompt(prompt);
   }
 
-  const session = await (window as any).ai.languageModel.create({
-    systemPrompt: options?.systemInstruction,
+  // Fall back to Gemini API
+  if (!GEMINI_API_KEY) {
+    throw new Error(
+      'AI is not available. Set NEXT_PUBLIC_GEMINI_API_KEY in your environment or enable Chrome Prompt API flags.'
+    );
+  }
+
+  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.0-flash',
+    contents: prompt,
+    ...(options?.systemInstruction && {
+      config: { systemInstruction: options.systemInstruction },
+    }),
   });
-  const response = await session.prompt(prompt);
-  return response;
+  return response.text ?? '';
 }
