@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { CalendarDays, Gift, Image as ImageIcon, Video, Home, Menu, X, Cpu, Camera, UserCircle2, Star, Trophy, Gamepad2, UtensilsCrossed, ShoppingCart, Wallet, Bot, MessageCircle, Settings, Package } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useFamilyMembers } from '@/hooks/use-family';
 import { CurrentUserProvider, useCurrentUser } from '@/hooks/use-current-user';
 import { HeartTrail } from './HeartTrail';
+import { registerFCMToken, onForegroundMessage } from '@/lib/fcm';
 
 const NAV_ITEMS = [
   { name: 'Calendar', href: '/', icon: CalendarDays },
@@ -40,6 +41,32 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
 
   const settingsActive = pathname === '/settings';
+
+  const [notifStatus, setNotifStatus] = useState<'idle' | 'loading' | 'on' | 'denied'>('idle');
+  const [foregroundToast, setForegroundToast] = useState<{ title: string; body?: string } | null>(null);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const unsub = onForegroundMessage((payload) => {
+      setForegroundToast({ title: payload.title ?? 'Bear House', body: payload.body });
+      setTimeout(() => setForegroundToast(null), 5000);
+    });
+    return unsub;
+  }, [currentUser?.id]);
+
+  async function handleEnableNotifications() {
+    if (!currentUser?.id) return;
+    setNotifStatus('loading');
+    const result = await registerFCMToken(currentUser.id);
+    if (result.success) {
+      setNotifStatus('on');
+    } else if (result.error === 'Permission denied') {
+      setNotifStatus('denied');
+    } else {
+      setNotifStatus('idle');
+      console.warn('[FCM]', result.error);
+    }
+  }
 
   return (
     <div className={`flex flex-col md:flex-row min-h-screen ${isAbriana ? 'bg-pink-50' : 'bg-slate-50'}`}>
@@ -105,16 +132,17 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
           </Link>
 
           <button
-            onClick={() => {
-              if ('Notification' in window) {
-                Notification.requestPermission().then(p =>
-                  alert(p === 'granted' ? 'Notifications enabled!' : 'Notifications blocked.')
-                );
-              }
-            }}
-            className="w-full px-3 py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors border border-slate-200/60"
+            onClick={handleEnableNotifications}
+            disabled={notifStatus === 'loading' || notifStatus === 'on'}
+            className={`w-full px-3 py-2 text-xs font-semibold rounded-lg transition-colors border ${
+              notifStatus === 'on'
+                ? 'bg-green-50 text-green-700 border-green-200 cursor-default'
+                : notifStatus === 'denied'
+                ? 'bg-red-50 text-red-600 border-red-200'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200/60'
+            }`}
           >
-            Enable Device Notifications
+            {notifStatus === 'loading' ? 'Enabling…' : notifStatus === 'on' ? '✓ Notifications On' : notifStatus === 'denied' ? 'Permission Denied' : 'Enable Notifications'}
           </button>
 
           <div className="space-y-4 pt-2">
@@ -271,6 +299,27 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
       <div className="flex-1 flex flex-col min-h-0 relative">
         {children}
       </div>
+
+      {/* Foreground notification toast */}
+      <AnimatePresence>
+        {foregroundToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-4 right-4 z-[200] max-w-sm bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 flex items-start gap-3"
+          >
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0 text-sm">🔔</div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm text-slate-900">{foregroundToast.title}</p>
+              {foregroundToast.body && <p className="text-xs text-slate-500 mt-0.5">{foregroundToast.body}</p>}
+            </div>
+            <button onClick={() => setForegroundToast(null)} className="text-slate-400 hover:text-slate-600 shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Mobile Bottom Navigation — 6 core items only */}
       <nav className={`md:hidden fixed bottom-0 inset-x-0 ${isAbriana ? 'bg-pink-100 border-pink-200' : 'bg-white border-t border-slate-200'} flex items-center justify-around pb-safe z-40`}>
