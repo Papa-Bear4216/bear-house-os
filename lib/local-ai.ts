@@ -54,6 +54,34 @@ export async function runLocalAI(prompt: string, options?: { systemInstruction?:
   return response.text ?? '';
 }
 
+export const RECEIPT_PROMPT = `You are analyzing a grocery receipt or a photo of grocery items/food. Extract everything you can see.
+Respond with ONLY valid JSON, no markdown:
+{
+  "storeName": "Store name or null",
+  "total": 0.00,
+  "items": [
+    {"name": "Milk", "quantity": 1, "unit": "gallon", "category": "dairy", "price": 3.99}
+  ]
+}
+Categories must be one of: produce, meat, dairy, bakery, pantry, frozen, beverages, household, personal-care, other
+If analyzing a photo of actual food/groceries (not a paper receipt), estimate reasonable quantities.
+Always return valid JSON with an "items" array, even if empty.`;
+
+export async function analyzeReceiptWithAI(imageBase64: string): Promise<{
+  storeName: string | null;
+  total: number;
+  items: { name: string; quantity: number; unit: string; category: string; price?: number }[];
+}> {
+  const raw = await analyzeImageWithAI(imageBase64, RECEIPT_PROMPT);
+  const match = raw.match(/```json\s*(\{[\s\S]*?\})\s*```/) ?? raw.match(/(\{[\s\S]*\})/);
+  const json = match ? match[1] : raw.trim();
+  try {
+    return JSON.parse(json);
+  } catch {
+    return { storeName: null, total: 0, items: [] };
+  }
+}
+
 export async function analyzeImageWithAI(imageBase64: string, prompt: string): Promise<string> {
   if (!GEMINI_API_KEY) {
     throw new Error('Set NEXT_PUBLIC_GEMINI_API_KEY to use the scanner AI.');

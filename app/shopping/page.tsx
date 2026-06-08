@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { ShoppingCart, Plus, Check, Trash2, Sparkles, X } from 'lucide-react';
+import { ShoppingCart, Plus, Check, Trash2, Sparkles, X, ScanLine } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useShopping } from '@/hooks/use-shopping';
 import { INGREDIENT_CATEGORY_LABELS, type Ingredient } from '@/lib/recipes';
 import { useFamilyMembers } from '@/hooks/use-family';
 import { askHermes } from '@/lib/hermes';
+import ReceiptScanner from '@/components/ReceiptScanner';
+import type { ScannedItem } from '@/components/ReceiptScanner';
 
 const CATEGORY_ORDER: Ingredient['category'][] = [
   'produce', 'meat', 'dairy', 'bakery', 'pantry', 'frozen', 'other',
@@ -20,6 +22,7 @@ export default function ShoppingPage() {
   const [adding, setAdding] = useState(false);
   const [hermesLoading, setHermesLoading] = useState(false);
   const [hermesTip, setHermesTip] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
 
   const uncheckedCount = items.filter(i => !i.checked).length;
   const checkedCount = items.filter(i => i.checked).length;
@@ -56,6 +59,16 @@ export default function ShoppingPage() {
     }
   }
 
+  async function handleScannerConfirm(scannedItems: ScannedItem[], _storeName: string | null, _total: number) {
+    const selected = scannedItems.filter(i => i.selected);
+    for (const item of selected) {
+      await addItem({
+        name: item.name, quantity: item.quantity, unit: item.unit,
+        category: 'other', checked: false, addedManually: true,
+      });
+    }
+  }
+
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6 pb-24">
       <div className="max-w-lg mx-auto">
@@ -71,6 +84,12 @@ export default function ShoppingPage() {
             </div>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={() => setShowScanner(true)}
+              className="flex items-center gap-1.5 bg-green-500 text-white text-xs font-bold px-3 py-2 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+            >
+              <ScanLine className="w-3.5 h-3.5" /> Scan
+            </button>
             <button
               onClick={askHermesForTips}
               disabled={hermesLoading || items.length === 0}
@@ -199,6 +218,16 @@ export default function ShoppingPage() {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {showScanner && (
+          <ReceiptScanner
+            mode="shopping"
+            onConfirm={handleScannerConfirm}
+            onClose={() => setShowScanner(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
