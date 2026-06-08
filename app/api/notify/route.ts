@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFirestore, getAdminMessaging } from '@/lib/firebase-admin';
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
 export const runtime = 'nodejs';
 
@@ -18,7 +19,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ sent: 0, reason: 'no tokens registered for this user' });
     }
 
-    const tokens = tokenSnap.docs.map(d => d.data().token as string).filter(Boolean);
+    const tokens: string[] = [];
+    for (const d of tokenSnap.docs) {
+      const t: unknown = (d.data() as Record<string, unknown>)['token'];
+      if (typeof t === 'string' && t.length > 0) tokens.push(t);
+    }
     if (!tokens.length) return NextResponse.json({ sent: 0, reason: 'no valid tokens' });
 
     const messaging = getAdminMessaging();
@@ -54,9 +59,10 @@ export async function POST(req: NextRequest) {
     if (staleTokens.length) {
       const batch = db.batch();
       const snap = await db.collection('users').doc(uid).collection('fcmTokens').get();
-      snap.docs.forEach(d => {
-        if (staleTokens.includes(d.data().token)) batch.delete(d.ref);
-      });
+      for (const d of snap.docs) {
+        const t = (d.data() as Record<string, unknown>)['token'];
+        if (typeof t === 'string' && staleTokens.includes(t)) batch.delete(d.ref);
+      }
       await batch.commit();
     }
 

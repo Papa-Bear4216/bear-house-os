@@ -1,22 +1,23 @@
-import * as admin from 'firebase-admin';
+import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 
-let app: admin.app.App | null = null;
+let app: App | null = null;
 
-export function getAdminApp(): admin.app.App {
+export function getAdminApp(): App {
   if (app) return app;
 
-  const existing = admin.apps.find(a => a?.name === '[DEFAULT]');
+  const existing = getApps().find(a => a.name === '[DEFAULT]');
   if (existing) { app = existing; return app; }
 
   const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (serviceAccount) {
-    app = admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(serviceAccount)),
+    app = initializeApp({
+      credential: cert(JSON.parse(serviceAccount)),
       databaseURL: `https://${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'prime-mechanic-463314-m8'}.firebaseio.com`,
     });
   } else {
-    // Fallback: use project ID + Google ADC (works in GCP/Firebase hosting)
-    app = admin.initializeApp({
+    app = initializeApp({
       projectId: 'prime-mechanic-463314-m8',
     });
   }
@@ -25,9 +26,11 @@ export function getAdminApp(): admin.app.App {
 }
 
 export function getAdminFirestore() {
-  return getAdminApp().firestore();
+  getAdminApp();
+  return getFirestore();
 }
 
 export function getAdminMessaging() {
-  return getAdminApp().messaging();
+  getAdminApp();
+  return getMessaging();
 }
