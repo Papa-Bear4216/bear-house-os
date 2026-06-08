@@ -3,13 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { CalendarDays, Gift, Image as ImageIcon, Video, Home, Menu, X, Cpu, Camera, UserCircle2, Star, Trophy, Gamepad2, UtensilsCrossed, ShoppingCart, Wallet, Bot, MessageCircle, Settings, Package } from 'lucide-react';
+import { CalendarDays, Gift, Image as ImageIcon, Video, Home, Menu, X, Cpu, Camera, Star, Trophy, Gamepad2, UtensilsCrossed, ShoppingCart, Wallet, Bot, MessageCircle, Settings, Package, LogOut } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useFamilyMembers } from '@/hooks/use-family';
 import { CurrentUserProvider, useCurrentUser } from '@/hooks/use-current-user';
 import { HeartTrail } from './HeartTrail';
 import { registerFCMToken, onForegroundMessage } from '@/lib/fcm';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 const NAV_ITEMS = [
   { name: 'Calendar', href: '/', icon: CalendarDays },
@@ -41,6 +43,18 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
 
   const settingsActive = pathname === '/settings';
+
+  // Hide budget from children
+  const visibleNavItems = NAV_ITEMS.filter(item => !(isChild && item.href === '/budget'));
+
+  async function handleLogout() {
+    try {
+      await signOut(auth);
+      window.location.href = '/login';
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  }
 
   const [notifStatus, setNotifStatus] = useState<'idle' | 'loading' | 'on' | 'denied'>('idle');
   const [foregroundToast, setForegroundToast] = useState<{ title: string; body?: string } | null>(null);
@@ -87,7 +101,7 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
@@ -144,6 +158,23 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
           >
             {notifStatus === 'loading' ? 'Enabling…' : notifStatus === 'on' ? '✓ Notifications On' : notifStatus === 'denied' ? 'Permission Denied' : 'Enable Notifications'}
           </button>
+
+          {/* Current user + logout */}
+          {currentUser && (
+            <div className="flex items-center justify-between px-2 py-2 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="flex items-center gap-2 min-w-0">
+                {currentUser.avatarUrl ? (
+                  <Image src={currentUser.avatarUrl} alt={currentUser.name} width={28} height={28} className="w-7 h-7 rounded-full border border-slate-200 object-cover shrink-0" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className={`w-7 h-7 rounded-full ${currentUser.color} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{currentUser.name[0]}</div>
+                )}
+                <span className="text-xs font-semibold text-slate-700 truncate">{currentUser.name}</span>
+              </div>
+              <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0" title="Sign out">
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           <div className="space-y-4 pt-2">
             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-2 flex items-center justify-between">
@@ -259,8 +290,25 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
                 </div>
               )}
 
+              {/* Current user display */}
+              {currentUser && (
+                <div className="px-4 pt-3 pb-2">
+                  <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                    {currentUser.avatarUrl ? (
+                      <Image src={currentUser.avatarUrl} alt={currentUser.name} width={32} height={32} className="w-8 h-8 rounded-full border border-slate-200 object-cover shrink-0" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className={`w-8 h-8 rounded-full ${currentUser.color} flex items-center justify-center text-white text-sm font-bold shrink-0`}>{currentUser.name[0]}</div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">{currentUser.name}</p>
+                      <p className="text-xs text-slate-400 capitalize">{currentUser.role}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-                {NAV_ITEMS.map((item) => {
+                {visibleNavItems.map((item) => {
                   const isActive = pathname === item.href;
                   return (
                     <Link
@@ -280,7 +328,7 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
                 })}
               </nav>
 
-              <div className="p-4 border-t border-slate-100">
+              <div className="p-4 border-t border-slate-100 space-y-2">
                 <Link
                   href="/setup-home"
                   onClick={() => setMobileMenuOpen(false)}
@@ -289,6 +337,13 @@ export function AppNavigationContent({ children }: { children: React.ReactNode }
                   <Bot className="w-4 h-4" />
                   Setup Your Home (Local AI)
                 </Link>
+                <button
+                  onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors border border-red-200/60"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
               </div>
             </motion.div>
           </>
