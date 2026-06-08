@@ -14,7 +14,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
 const NAV_ITEMS = [
-  { name: 'Calendar', href: '/', icon: CalendarDays },
+  { name: 'Calendar', href: '/calendar', icon: CalendarDays },
   { name: 'Missions', href: '/missions', icon: Gamepad2 },
   { name: 'Meals', href: '/meals', icon: UtensilsCrossed },
   { name: 'Shopping', href: '/shopping', icon: ShoppingCart },
@@ -30,7 +30,7 @@ const NAV_ITEMS = [
 ];
 
 // Only these 6 show on the mobile bottom bar — everything else is in the hamburger
-const BOTTOM_NAV = ['/', '/missions', '/messages', '/meals', '/assistant', '/shopping'];
+const BOTTOM_NAV = ['/calendar', '/missions', '/messages', '/meals', '/assistant', '/shopping'];
 
 export function AppNavigationContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
