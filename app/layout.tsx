@@ -18,7 +18,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: 'DysfunctionJunction',
+  title: 'Dysfunction Junction',
   description: 'Private family productivity app — chores, calendar, meals, and more.',
 };
 
