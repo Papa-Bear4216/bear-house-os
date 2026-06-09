@@ -18,8 +18,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: 'Bear House Family OS',
-  description: 'Family chore chart and OS with calendar view.',
+  title: 'DysfunctionJunction',
+  description: 'Private family productivity app — chores, calendar, meals, and more.',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
