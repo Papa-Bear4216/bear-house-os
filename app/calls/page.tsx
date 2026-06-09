@@ -10,14 +10,11 @@ export default function CallsPage() {
 
   const isUserBusy = (userId: string) => {
     const now = new Date();
-    const todayStr = '2026-04-27'; // Hardcoding for AI Studio runtime or use now.toISOString().split('T')[0]
-    const actualTodayStr = now.toISOString().split('T')[0];
-    const currentTimeStr = now.toTimeString().substring(0, 5); // "HH:MM"
-    
-    // Check if they have an event today that encapsulates the current time
-    return events.some(e => 
-      e.userId === userId && 
-      e.date === actualTodayStr && 
+    const todayStr = now.toISOString().split('T')[0];
+    const currentTimeStr = now.toTimeString().substring(0, 5);
+    return events.some(e =>
+      e.userId === userId &&
+      e.date === todayStr &&
       e.startTime && e.endTime &&
       e.startTime <= currentTimeStr && e.endTime >= currentTimeStr
     );

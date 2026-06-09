@@ -1,23 +1,20 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
-import { MapContainer, ImageOverlay, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, ImageOverlay, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useFamilyMembers } from '@/hooks/use-family';
 import { useTasks } from '@/hooks/use-tasks';
-import { UploadCloud, CheckCircle2, MapPin } from 'lucide-react';
+import { UploadCloud, CheckCircle2, MapPin, Loader2 } from 'lucide-react';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db, storage, isPlaceholder, auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
-function useLocalStorage<T>(key: string, initialValue: T): [T, (v: T) => void, () => void] {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === 'undefined') return initialValue;
-    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : initialValue; } catch { return initialValue; }
-  });
-  const set = useCallback((v: T) => { setValue(v); try { localStorage.setItem(key, JSON.stringify(v)); } catch {} }, [key]);
-  const remove = useCallback(() => { setValue(initialValue); try { localStorage.removeItem(key); } catch {} }, [key, initialValue]);
-  return [value, set, remove];
-}
+const FLOORPLAN_STORAGE_PATH = 'floorplan/current';
+const FLOORPLAN_LS_KEY = 'bearhouse_floorplan_url';
 
 const DefaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -30,7 +27,7 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-function FloorPlanOverlay({ url, bounds }: { url: string, bounds: L.LatLngBoundsExpression }) {
+function FloorPlanOverlay({ url, bounds }: { url: string; bounds: L.LatLngBoundsExpression }) {
   const map = useMap();
   useEffect(() => {
     map.fitBounds(bounds, { padding: [20, 20] });
@@ -42,67 +39,115 @@ function FloorPlanOverlay({ url, bounds }: { url: string, bounds: L.LatLngBounds
 export default function FamilyMap() {
   const { users } = useFamilyMembers();
   const { tasks, updateTaskStatus } = useTasks();
-  const [floorPlanData, setFloorPlanData, removeFloorPlanData] = useLocalStorage<string>('bearhouse_floorplan', '');
-  
+  const [floorPlanUrl, setFloorPlanUrl] = useState<string>('');
   const [imgBounds, setImgBounds] = useState<L.LatLngBoundsExpression | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [user, setUser] = useState(auth.currentUser);
 
   useEffect(() => {
-    if (floorPlanData) {
-      const img = new window.Image();
-      img.onload = () => {
-        // use an arbitrary scale, say 1px = 1 map unit for CRS.Simple
-        const w = img.width;
-        const h = img.height;
-        // Leaflet CRS.Simple coords are [y, x]
-        // Southwest corner, Northeast corner
-        setImgBounds([[0, 0], [h, w]]);
-      };
-      img.src = floorPlanData;
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setImgBounds(null);
-    }
-  }, [floorPlanData]);
+    return onAuthStateChanged(auth, setUser);
+  }, []);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFloorPlanData(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+  // Load floor plan URL from Firestore, fall back to localStorage cache
+  useEffect(() => {
+    const loadFloorPlan = async () => {
+      if (isPlaceholder) {
+        const cached = localStorage.getItem(FLOORPLAN_LS_KEY);
+        if (cached) setFloorPlanUrl(cached);
+        return;
+      }
+      try {
+        // Parse nested path: 'households/shared/settings'
+        // households/shared/config/floorplan: 4 segments (col/doc/col/doc) ✓
+        const docRef = doc(db, 'households', 'shared', 'config', 'floorplan');
+        const snap = await getDoc(docRef);
+        const url = snap.data()?.floorPlanUrl as string | undefined;
+        if (url) {
+          setFloorPlanUrl(url);
+          localStorage.setItem(FLOORPLAN_LS_KEY, url);
+        } else {
+          // Try localStorage cache while Firestore is empty
+          const cached = localStorage.getItem(FLOORPLAN_LS_KEY);
+          if (cached) setFloorPlanUrl(cached);
+        }
+      } catch {
+        const cached = localStorage.getItem(FLOORPLAN_LS_KEY);
+        if (cached) setFloorPlanUrl(cached);
+      }
+    };
+    if (user || isPlaceholder) loadFloorPlan();
+  }, [user]);
+
+  // Compute image bounds when URL changes
+  useEffect(() => {
+    if (!floorPlanUrl) { setImgBounds(null); return; }
+    const img = new window.Image();
+    img.onload = () => setImgBounds([[0, 0], [img.height, img.width]]);
+    img.src = floorPlanUrl;
+  }, [floorPlanUrl]);
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    setUploading(true);
+    try {
+      if (isPlaceholder) {
+        // Local-only mode: use object URL (session only)
+        const url = URL.createObjectURL(file);
+        setFloorPlanUrl(url);
+        localStorage.setItem(FLOORPLAN_LS_KEY, url);
+        return;
+      }
+      const sRef = storageRef(storage, FLOORPLAN_STORAGE_PATH);
+      await uploadBytes(sRef, file);
+      const url = await getDownloadURL(sRef);
+      const docRef = doc(db, 'households', 'shared', 'config', 'floorplan');
+      await setDoc(docRef, { floorPlanUrl: url }, { merge: true });
+      setFloorPlanUrl(url);
+      localStorage.setItem(FLOORPLAN_LS_KEY, url);
+    } finally {
+      setUploading(false);
     }
+  }, []);
+
+  const handleRemove = useCallback(async () => {
+    setFloorPlanUrl('');
+    setImgBounds(null);
+    localStorage.removeItem(FLOORPLAN_LS_KEY);
+    if (isPlaceholder) return;
+    try {
+      const docRef = doc(db, 'households', 'shared', 'config', 'floorplan');
+      await setDoc(docRef, { floorPlanUrl: '' }, { merge: true });
+      await deleteObject(storageRef(storage, FLOORPLAN_STORAGE_PATH));
+    } catch {}
+  }, []);
+
+  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUpload(file);
   };
 
   const tasksWithCoords = tasks.filter(t => t.status !== 'done' && t.completed !== true);
 
-  if (!floorPlanData || !imgBounds) {
+  if (!floorPlanUrl || !imgBounds) {
     return (
       <div className="w-full h-full min-h-[500px] bg-slate-100 rounded-3xl overflow-hidden border-4 border-slate-900 border-dashed flex flex-col items-center justify-center p-8 text-center bg-[#cbd5e1]">
         <div className="w-24 h-24 bg-white rounded-full border-4 border-slate-900 shadow-[8px_8px_0_#1e293b] flex items-center justify-center mb-6">
-          <UploadCloud className="w-10 h-10 text-slate-900 stroke-[3]" />
+          {uploading
+            ? <Loader2 className="w-10 h-10 text-slate-900 animate-spin" />
+            : <UploadCloud className="w-10 h-10 text-slate-900 stroke-[3]" />}
         </div>
         <h3 className="font-display text-2xl font-black uppercase text-slate-900 tracking-tighter mb-2">Upload Home Floorplan</h3>
         <p className="text-slate-700 font-bold mb-8 max-w-md">Upload your home&apos;s floor plan to map out chores and storage locations visually.</p>
-        
-        <label 
+        <label
           className="cursor-pointer font-black uppercase tracking-wider text-white bg-[#be185d] px-8 py-4 rounded-xl border-4 border-slate-900 shadow-[4px_4px_0_#1e293b] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all active:scale-95 text-lg"
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
             const file = e.dataTransfer.files?.[0];
-            if (file) {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                setFloorPlanData(reader.result as string);
-              };
-              reader.readAsDataURL(file);
-            }
+            if (file) handleFileUpload(file);
           }}
         >
-          Select or Drag Image Here
-          <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+          {uploading ? 'Uploading…' : 'Select or Drag Image Here'}
+          <input type="file" accept="image/*" className="hidden" onChange={onInputChange} disabled={uploading} />
         </label>
       </div>
     );
@@ -118,54 +163,45 @@ export default function FamilyMap() {
           style={{ height: '100%', width: '100%', zIndex: 0 }}
           className="bg-[#cbd5e1]"
         >
-          <FloorPlanOverlay url={floorPlanData} bounds={imgBounds} />
-          
-          {/* We randomly scatter chores on the map for now since we don't know the exact polygons. 
-              In a full version, we'd map "Primary Toy Bin" to specific [y,x] coords! */}
-          {tasksWithCoords.map((task, i) => {
-             const u = users.find(x => x.id === task.assigneeId);
-             
-             // Pseudo-random deterministic placement based on task ID
-             const hash = task.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-             const yMax = (imgBounds as number[][])[1][0];
-             const xMax = (imgBounds as number[][])[1][1];
-             const yLoc = (hash % 80 + 10) / 100 * yMax; 
-             const xLoc = ((hash * 3) % 80 + 10) / 100 * xMax;
-
-             return (
-               <Marker key={task.id} position={[yLoc, xLoc]}>
-                 <Popup>
-                   <div className="font-bold text-slate-800 text-lg mb-1">{task.title}</div>
-                   <div className="text-xs text-slate-600 font-medium mb-3 flex items-center gap-1">
-                     <MapPin className="w-3 h-3" /> {task.properStorage || 'Unsorted'}
-                   </div>
-                   
-                   {u && (
-                     <div className="flex items-center gap-2 mb-3 bg-slate-100 p-2 rounded-lg border border-slate-200">
-                       {u.avatarUrl ? (
-                         <Image src={u.avatarUrl} width={24} height={24} className="w-6 h-6 rounded-full border border-slate-300" referrerPolicy="no-referrer" alt={u.name}/>
-                       ) : (
-                         <div className={`w-6 h-6 rounded-full ${u.color} border border-slate-300`}></div>
-                       )}
-                       <span className="text-sm font-semibold">{u.name}</span>
-                     </div>
-                   )}
-                   
-                   <button 
-                     onClick={() => updateTaskStatus(task.id, 'done')}
-                     className="w-full py-1.5 bg-emerald-500 text-white font-bold rounded-lg text-sm flex items-center justify-center gap-1 hover:bg-emerald-600 transition-colors"
-                   >
-                     <CheckCircle2 className="w-4 h-4" /> Mark Done
-                   </button>
-                 </Popup>
-               </Marker>
-             )
+          <FloorPlanOverlay url={floorPlanUrl} bounds={imgBounds} />
+          {tasksWithCoords.map((task) => {
+            const u = users.find(x => x.id === task.assigneeId);
+            const hash = task.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const yMax = (imgBounds as number[][])[1][0];
+            const xMax = (imgBounds as number[][])[1][1];
+            const yLoc = (hash % 80 + 10) / 100 * yMax;
+            const xLoc = ((hash * 3) % 80 + 10) / 100 * xMax;
+            return (
+              <Marker key={task.id} position={[yLoc, xLoc]}>
+                <Popup>
+                  <div className="font-bold text-slate-800 text-lg mb-1">{task.title}</div>
+                  <div className="text-xs text-slate-600 font-medium mb-3 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> {task.properStorage || 'Unsorted'}
+                  </div>
+                  {u && (
+                    <div className="flex items-center gap-2 mb-3 bg-slate-100 p-2 rounded-lg border border-slate-200">
+                      {u.avatarUrl ? (
+                        <Image src={u.avatarUrl} width={24} height={24} className="w-6 h-6 rounded-full border border-slate-300" referrerPolicy="no-referrer" alt={u.name} />
+                      ) : (
+                        <div className={`w-6 h-6 rounded-full ${u.color} border border-slate-300`}></div>
+                      )}
+                      <span className="text-sm font-semibold">{u.name}</span>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => updateTaskStatus(task.id, 'done')}
+                    className="w-full py-1.5 bg-emerald-500 text-white font-bold rounded-lg text-sm flex items-center justify-center gap-1 hover:bg-emerald-600 transition-colors"
+                  >
+                    <CheckCircle2 className="w-4 h-4" /> Mark Done
+                  </button>
+                </Popup>
+              </Marker>
+            );
           })}
         </MapContainer>
-        
-        <button 
-           onClick={() => removeFloorPlanData()}
-           className="absolute bottom-4 right-4 z-[400] bg-white border-2 border-slate-900 shadow-[4px_4px_0_#1e293b] px-4 py-2 rounded-xl text-xs font-black uppercase text-slate-900 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+        <button
+          onClick={handleRemove}
+          className="absolute bottom-4 right-4 z-[400] bg-white border-2 border-slate-900 shadow-[4px_4px_0_#1e293b] px-4 py-2 rounded-xl text-xs font-black uppercase text-slate-900 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
         >
           Change Map
         </button>
