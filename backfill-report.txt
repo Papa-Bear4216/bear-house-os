@@ -1,0 +1,21 @@
+familyId backfill report — 2026-06-10T12:15:17.080Z (LIVE RUN)
+Project prime-mechanic-463314-m8, database ai-studio-5a6aeb79-f287-4f57-8c65-c96c8b467352
+Canonical familyId: BEAR12
+
+collection                                 scanned  updated  already-tagged
+users                                            4        4               0
+tasks                                            0        0               0
+events                                           2        2               0
+mealPlans                                        0        0               0
+games                                            1        1               0
+posts                                            0        0               0
+gallery                                          0        0               0
+familyMessages/BEAR12/messages                   7        7               0
+households/*/hermesMemory                        4        4               0
+households/*/dashboardConfig                     2        2               0
+households/*/plaid                               1        1               0
+households/*/settings                            1        1               0
+
+TOTAL scanned: 22, updated: 22, already tagged: 0
+Docs that could NOT be matched to a family (left untouched): 0
+No unknown top-level collections.

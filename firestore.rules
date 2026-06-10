@@ -7,14 +7,47 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    function isAllowed() {
-      return request.auth != null &&
-        request.auth.token.email in [
-          'michael711hebert@gmail.com',
-          'littlebear8991@gmail.com',
-          'jchebert2010@gmail.com',
-          'hpfanatic009@gmail.com'
-        ];
+    // ---- Membership & tenancy ----
+    // Family membership is established by your users/{uid} doc, which carries
+    // your familyId. The email allowlist gates ONLY profile creation (joining);
+    // all data access is familyId-scoped tenant isolation.
+
+    function isAllowedEmail() {
+      return request.auth.token.email in [
+        'michael711hebert@gmail.com',
+        'littlebear8991@gmail.com',
+        'jchebert2010@gmail.com',
+        'hpfanatic009@gmail.com'
+      ];
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myFamilyId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId;
+    }
+
+    function isFamilyMember() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && myFamilyId() is string;
+    }
+
+    // Doc being read/updated/deleted belongs to my family
+    function inMyFamily() {
+      return isFamilyMember() && resource.data.familyId == myFamilyId();
+    }
+
+    // Doc being created is stamped with my family
+    function createsInMyFamily() {
+      return isFamilyMember() && request.resource.data.familyId == myFamilyId();
+    }
+
+    // Updates may never move a doc to another family (or drop the stamp)
+    function keepsFamilyId() {
+      return request.resource.data.familyId == resource.data.familyId;
     }
 
     function isValidId(id) {
@@ -56,69 +89,84 @@ service cloud.firestore {
 
     // --- Users ---
     match /users/{userId} {
-      allow read: if isAllowed();
-      allow create: if isAllowed() && isValidId(userId) && isValidUser(request.resource.data);
-      allow update: if isAllowed() && isValidUser(request.resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['points', 'avatarUrl', 'name', 'color', 'role', 'meetLink', 'isExempt']);
+      allow read: if isSignedIn() && (request.auth.uid == userId || inMyFamily());
+      allow create: if isSignedIn() && request.auth.uid == userId && isAllowedEmail()
+        && isValidId(userId)
+        && request.resource.data.familyId is string && request.resource.data.familyId.size() <= 32;
+      allow update: if inMyFamily() && keepsFamilyId() && isValidUser(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['points', 'avatarUrl', 'name', 'color', 'role', 'meetLink', 'isExempt', 'familyCode', 'updatedAt']);
       allow delete: if false;
+
+      // Per-device push tokens — only the owner reads/writes their own
+      match /fcmTokens/{tokenId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     // --- Tasks ---
     match /tasks/{taskId} {
-      allow read: if isAllowed();
-      allow create: if isAllowed() && isValidId(taskId) && isValidTask(request.resource.data);
-      allow update: if isAllowed() && isValidTask(request.resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['title', 'assigneeId', 'date', 'completed', 'status', 'pointsValue']);
-      allow delete: if isAllowed();
+      allow read: if inMyFamily();
+      allow create: if createsInMyFamily() && isValidId(taskId) && isValidTask(request.resource.data);
+      allow update: if inMyFamily() && keepsFamilyId() && isValidTask(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['title', 'assigneeId', 'date', 'completed', 'status', 'pointsValue', 'properStorage', 'updatedAt']);
+      allow delete: if inMyFamily();
     }
 
     // --- Events ---
     match /events/{eventId} {
-      allow read: if isAllowed();
-      allow create: if isAllowed() && isValidId(eventId) && isValidEvent(request.resource.data);
-      allow update: if isAllowed() && isValidEvent(request.resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['title', 'userId', 'date', 'startTime', 'endTime']);
-      allow delete: if isAllowed();
+      allow read: if inMyFamily();
+      allow create: if createsInMyFamily() && isValidId(eventId) && isValidEvent(request.resource.data);
+      allow update: if inMyFamily() && keepsFamilyId() && isValidEvent(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['title', 'userId', 'date', 'startTime', 'endTime', 'updatedAt']);
+      allow delete: if inMyFamily();
     }
 
     // --- Meal Plans ---
     match /mealPlans/{docId} {
-      allow read:   if isAllowed();
-      allow create: if isAllowed();
-      allow update: if isAllowed();
-      allow delete: if isAllowed();
+      allow read:   if inMyFamily();
+      allow create: if createsInMyFamily();
+      allow update: if inMyFamily() && keepsFamilyId();
+      allow delete: if inMyFamily();
     }
 
-    // --- Households (shopping, Hermes memory, Plaid, dashboard config)
-    // Floor plan is stored at households/shared/config/floorplan ---
-    match /households/{uid}/{document=**} {
-      allow read:  if isAllowed();
-      allow write: if isAllowed();
-    }
-
-    // --- Family Messages ---
-    match /familyMessages/{familyCode}/messages/{messageId} {
-      allow read:   if isAllowed();
-      allow create: if isAllowed();
-      allow delete: if isAllowed() && request.auth.uid == resource.data.userId;
+    // --- Games ---
+    match /games/{gameId} {
+      allow read:   if inMyFamily();
+      allow create: if createsInMyFamily();
+      allow update: if inMyFamily() && keepsFamilyId();
+      allow delete: if inMyFamily();
     }
 
     // --- Posts (Bulletin Board) ---
     match /posts/{postId} {
-      allow read:   if isAllowed();
-      allow create: if isAllowed();
-      allow update: if isAllowed();
-      allow delete: if isAllowed();
+      allow read:   if inMyFamily();
+      allow create: if createsInMyFamily();
+      allow update: if inMyFamily() && keepsFamilyId();
+      allow delete: if inMyFamily();
     }
 
     // --- Gallery ---
     match /gallery/{photoId} {
-      allow read:   if isAllowed();
-      allow create: if isAllowed();
-      allow delete: if isAllowed();
+      allow read:   if inMyFamily();
+      allow create: if createsInMyFamily();
+      allow delete: if inMyFamily();
+    }
+
+    // --- Households (shopping, pantry, Hermes memory, Plaid, dashboard config,
+    // floor plan at households/shared/config/floorplan) ---
+    // Path-keyed by member uid or 'shared'; membership-scoped.
+    match /households/{hid}/{document=**} {
+      allow read, write: if isFamilyMember();
+    }
+
+    // --- Family Messages (family-scoped by path segment) ---
+    match /familyMessages/{familyCode}/messages/{messageId} {
+      allow read, create: if isFamilyMember() && familyCode == myFamilyId();
+      allow delete: if isFamilyMember() && familyCode == myFamilyId()
+        && request.auth.uid == resource.data.userId;
     }
   }
 }

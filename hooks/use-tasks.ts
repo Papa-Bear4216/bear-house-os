@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, isPlaceholder, auth } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { getMyFamilyId } from '../lib/family-id';
 
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -100,6 +101,7 @@ export function useTasks() {
       
       await addDoc(collection(db, path), {
         ...task,
+        familyId: await getMyFamilyId(),
         createdAt: serverTimestamp()
       });
     } catch (error) {

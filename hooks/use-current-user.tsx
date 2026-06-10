@@ -64,6 +64,7 @@ export function CurrentUserProvider({ children }: { children: React.ReactNode })
           role: profile?.role ?? 'child',
           points: 0,
           familyCode: FAMILY_CODE,
+          familyId: FAMILY_CODE,
           avatarUrl: googleUser.photoURL ?? undefined,
         };
 

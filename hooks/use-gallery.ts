@@ -8,6 +8,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, isPlaceholder, auth } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { getMyFamilyId } from '../lib/family-id';
 
 export interface GalleryPhoto {
   id: string;
@@ -54,6 +55,7 @@ export function useGallery() {
         date: dateStr,
         storagePath,
         uploadedBy: user?.email ?? '',
+        familyId: await getMyFamilyId(),
         createdAt: serverTimestamp(),
       });
     } finally {

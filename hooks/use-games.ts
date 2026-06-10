@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { getMyFamilyId } from '@/lib/family-id';
 
 export type GameType = 'trivia' | 'challenge' | 'riddle' | 'story';
 
@@ -40,7 +41,7 @@ export function useGames() {
 
   const addGame = useCallback(async (game: Omit<GameChallenge, 'id' | 'createdAt'>) => {
     if (!db) return;
-    await addDoc(collection(db, 'games'), { ...game, createdAt: serverTimestamp() });
+    await addDoc(collection(db, 'games'), { ...game, familyId: await getMyFamilyId(), createdAt: serverTimestamp() });
   }, []);
 
   const updateGame = useCallback(async (id: string, updates: Partial<GameChallenge>) => {

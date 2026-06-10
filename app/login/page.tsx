@@ -75,7 +75,7 @@ export default function LoginPage() {
     const newFamilyCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     const newUserDoc: AppUser = {
       id: fbUser.uid, name: userName.trim(), color: userColor,
-      role: 'superadmin', points: 0, familyCode: newFamilyCode,
+      role: 'superadmin', points: 0, familyCode: newFamilyCode, familyId: newFamilyCode,
     };
     try {
       await setDoc(doc(db, 'users', fbUser.uid), newUserDoc);
@@ -103,7 +103,7 @@ export default function LoginPage() {
       }
       const newUserDoc: AppUser = {
         id: fbUser.uid, name: userName.trim(), color: userColor,
-        role: 'child', points: 0, familyCode: targetCode,
+        role: 'child', points: 0, familyCode: targetCode, familyId: targetCode,
       };
       await setDoc(doc(db, 'users', fbUser.uid), newUserDoc);
       localStorage.setItem('current_user_id', fbUser.uid);

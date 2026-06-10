@@ -6,6 +6,7 @@ import {
   collection, doc, setDoc, deleteDoc, onSnapshot, query, where,
 } from 'firebase/firestore';
 import { auth } from '@/lib/firebase';
+import { getMyFamilyId } from '@/lib/family-id';
 
 export type MealSlot = 'breakfast' | 'lunch' | 'dinner';
 
@@ -47,7 +48,7 @@ export function useMeals(weekStart: string) {
     if (!db) return;
     const uid = auth?.currentUser?.uid ?? 'shared';
     const id = `${uid}_${meal.date}_${meal.slot}`;
-    await setDoc(doc(db, 'mealPlans', id), { ...meal, weekOwner: uid });
+    await setDoc(doc(db, 'mealPlans', id), { ...meal, weekOwner: uid, familyId: await getMyFamilyId() });
   }
 
   async function removeMeal(id: string) {

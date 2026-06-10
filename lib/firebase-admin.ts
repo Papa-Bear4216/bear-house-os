@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
+import firebaseConfig from '../firebase-applet-config.json';
 
 let app: App | null = null;
 
@@ -26,8 +27,8 @@ export function getAdminApp(): App {
 }
 
 export function getAdminFirestore() {
-  getAdminApp();
-  return getFirestore();
+  // The app lives in a named Firestore database, not (default)
+  return getFirestore(getAdminApp(), firebaseConfig.firestoreDatabaseId);
 }
 
 export function getAdminMessaging() {

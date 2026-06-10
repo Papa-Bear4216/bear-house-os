@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, isPlaceholder, auth } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { getMyFamilyId } from '../lib/family-id';
 
 export function useEvents() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -98,6 +99,7 @@ export function useEvents() {
       
       await addDoc(collection(db, path), {
         ...event,
+        familyId: await getMyFamilyId(),
         createdAt: serverTimestamp()
       });
     } catch (error) {

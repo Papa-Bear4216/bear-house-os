@@ -10,6 +10,7 @@ export type AppUser = {
   meetLink?: string;
   isExempt?: boolean;
   familyCode?: string;
+  familyId?: string;
   createdAt?: any;
   updatedAt?: any;
 };

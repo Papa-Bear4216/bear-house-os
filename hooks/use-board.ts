@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { collection, query, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType, isPlaceholder } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { getMyFamilyId } from '@/lib/family-id';
 
 export type BoardPost = {
   id: string;
@@ -55,6 +56,7 @@ export function useBoard() {
       await setDoc(postRef, {
         id: newId,
         ...postData,
+        familyId: await getMyFamilyId(),
         createdAt: serverTimestamp()
       });
     } catch (error) {
