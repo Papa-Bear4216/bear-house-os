@@ -1,6 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
-
-const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+import { authFetch } from '@/lib/api-client';
 
 async function hasChromeLocalAI(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -17,14 +15,7 @@ export async function checkLocalAIAvailability() {
   if (await hasChromeLocalAI()) {
     return { available: true, status: 'readily', message: 'On-device Gemini Nano is ready.' };
   }
-  if (GEMINI_API_KEY) {
-    return { available: true, status: 'gemini-api', message: 'Gemini API is available.' };
-  }
-  return {
-    available: false,
-    status: 'missing',
-    message: 'No AI configured. Set NEXT_PUBLIC_GEMINI_API_KEY or enable the Chrome Prompt API (chrome://flags/#prompt-api-for-gemini-nano).',
-  };
+  return { available: true, status: 'server', message: 'Server-side AI is available.' };
 }
 
 export async function runLocalAI(prompt: string, options?: { systemInstruction?: string }): Promise<string> {
@@ -36,68 +27,36 @@ export async function runLocalAI(prompt: string, options?: { systemInstruction?:
     return await session.prompt(prompt);
   }
 
-  // Fall back to Gemini API
-  if (!GEMINI_API_KEY) {
-    throw new Error(
-      'AI is not available. Set NEXT_PUBLIC_GEMINI_API_KEY in your environment or enable Chrome Prompt API flags.'
-    );
-  }
-
-  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
-    contents: prompt,
-    ...(options?.systemInstruction && {
-      config: { systemInstruction: options.systemInstruction },
+  // Fall back to the server-side AI route (keys never leave the server)
+  const res = await authFetch('/api/hermes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: prompt }],
+      systemOverride: options?.systemInstruction ?? 'You are a helpful assistant. Follow the user instructions exactly.',
     }),
   });
-  return response.text ?? '';
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `AI request failed (${res.status})`);
+  }
+  const data = await res.json();
+  return data.content ?? '';
 }
-
-export const RECEIPT_PROMPT = `You are analyzing a grocery receipt or a photo of grocery items/food. Extract everything you can see.
-Respond with ONLY valid JSON, no markdown:
-{
-  "storeName": "Store name or null",
-  "total": 0.00,
-  "items": [
-    {"name": "Milk", "quantity": 1, "unit": "gallon", "category": "dairy", "price": 3.99}
-  ]
-}
-Categories must be one of: produce, meat, dairy, bakery, pantry, frozen, beverages, household, personal-care, other
-If analyzing a photo of actual food/groceries (not a paper receipt), estimate reasonable quantities.
-Always return valid JSON with an "items" array, even if empty.`;
 
 export async function analyzeReceiptWithAI(imageBase64: string): Promise<{
   storeName: string | null;
   total: number;
   items: { name: string; quantity: number; unit: string; category: string; price?: number }[];
 }> {
-  const raw = await analyzeImageWithAI(imageBase64, RECEIPT_PROMPT);
-  const match = raw.match(/```json\s*(\{[\s\S]*?\})\s*```/) ?? raw.match(/(\{[\s\S]*\})/);
-  const json = match ? match[1] : raw.trim();
-  try {
-    return JSON.parse(json);
-  } catch {
-    return { storeName: null, total: 0, items: [] };
-  }
-}
-
-export async function analyzeImageWithAI(imageBase64: string, prompt: string): Promise<string> {
-  if (!GEMINI_API_KEY) {
-    throw new Error('Set NEXT_PUBLIC_GEMINI_API_KEY to use the scanner AI.');
-  }
-  const base64Data = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
-  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
-    contents: [
-      {
-        parts: [
-          { inlineData: { mimeType: 'image/jpeg', data: base64Data } },
-          { text: prompt },
-        ],
-      },
-    ],
+  const res = await authFetch('/api/scan-receipt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: imageBase64 }),
   });
-  return response.text ?? '';
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Receipt scan failed (${res.status})`);
+  }
+  return res.json();
 }

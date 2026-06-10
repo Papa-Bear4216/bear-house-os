@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
+import { verifyAuth, unauthorized } from '@/lib/server-auth';
 
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+export const maxDuration = 60;
+
+// Never trust a client-supplied model string — allowlist only.
+const ALLOWED_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
 
 // Structured output schema — forces Gemini to return parseable JSON, no markdown wrapping.
 const scanSchema = {
@@ -96,12 +100,17 @@ OUTPUT:
 Return ONLY the JSON, no commentary.`;
 
 export async function POST(req: NextRequest) {
+  if (!(await verifyAuth(req))) return unauthorized();
+
   try {
-    const { image } = await req.json();
+    const { image, model } = await req.json();
 
     if (!image || typeof image !== 'string') {
       return NextResponse.json({ error: 'Missing or invalid image' }, { status: 400 });
     }
+
+    const selectedModel: (typeof ALLOWED_MODELS)[number] =
+      ALLOWED_MODELS.includes(model) ? model : 'gemini-2.5-flash';
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -119,7 +128,7 @@ export async function POST(req: NextRequest) {
     const ai = new GoogleGenAI({ apiKey });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash', // Multimodal, fast, cheap — right tool for this
+      model: selectedModel, // Default flash (fast, cheap); pro only via explicit re-scan
       contents: [
         {
           role: 'user',

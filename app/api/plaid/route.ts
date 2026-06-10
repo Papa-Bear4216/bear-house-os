@@ -6,6 +6,7 @@ import {
   Products,
   CountryCode,
 } from 'plaid';
+import { verifyAuth, unauthorized } from '@/lib/server-auth';
 
 function getPlaidClient() {
   const env = process.env.PLAID_ENV as keyof typeof PlaidEnvironments;
@@ -23,6 +24,8 @@ function getPlaidClient() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await verifyAuth(req))) return unauthorized();
+
   let body: any = {};
   try {
     body = await req.json();

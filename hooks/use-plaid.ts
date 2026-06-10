@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase';
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { authFetch } from '@/lib/api-client';
 
 export interface PlaidAccount {
   account_id: string;
@@ -67,7 +68,7 @@ export function usePlaid() {
   }, [loadingBanks]);
 
   async function getLinkToken(userId?: string): Promise<string> {
-    const res = await fetch('/api/plaid', {
+    const res = await authFetch('/api/plaid', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: userId ?? uid() }),
@@ -78,7 +79,7 @@ export function usePlaid() {
   }
 
   async function exchangeAndSave(publicToken: string, institutionName?: string) {
-    const res = await fetch('/api/plaid', {
+    const res = await authFetch('/api/plaid', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'exchange_token', public_token: publicToken }),
@@ -112,12 +113,12 @@ export function usePlaid() {
 
       for (const bank of list) {
         const [accRes, txRes] = await Promise.all([
-          fetch('/api/plaid', {
+          authFetch('/api/plaid', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'get_accounts', access_token: bank.accessToken }),
           }),
-          fetch('/api/plaid', {
+          authFetch('/api/plaid', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'get_transactions', access_token: bank.accessToken }),

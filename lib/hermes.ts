@@ -1,3 +1,5 @@
+import { authFetch } from '@/lib/api-client';
+
 export interface HermesMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -21,7 +23,7 @@ export async function askHermes(
   context: FamilyContext = {},
   systemOverride?: string
 ): Promise<{ content: string; model: string }> {
-  const res = await fetch('/api/hermes', {
+  const res = await authFetch('/api/hermes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, context, systemOverride }),

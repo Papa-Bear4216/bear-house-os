@@ -1,3 +1,5 @@
+import { authFetch } from '@/lib/api-client';
+
 export async function sendNotification(opts: {
   uid: string;
   title: string;
@@ -6,7 +8,7 @@ export async function sendNotification(opts: {
   data?: Record<string, string>;
 }) {
   try {
-    await fetch('/api/notify', {
+    await authFetch('/api/notify', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(opts),
@@ -24,7 +26,7 @@ export async function broadcastNotification(opts: {
   data?: Record<string, string>;
 }) {
   try {
-    await fetch('/api/notify', {
+    await authFetch('/api/notify', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(opts),

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, RefreshCw, Plus, Loader2, Sparkles, CheckSquare, Map, Clock, ShieldAlert, Zap, Info, AlertTriangle } from 'lucide-react';
-import { analyzeImageWithAI } from '@/lib/local-ai';
+import { authFetch } from '@/lib/api-client';
 import { useTasks } from '@/hooks/use-tasks';
 import { useFamilyMembers } from '@/hooks/use-family';
 import { format } from 'date-fns';
@@ -30,6 +30,7 @@ type Mission = {
   description: string;
   totalTimeEstimate: string;
   funFact: string;
+  firstStep?: string;
   relatedChores: Chore[];
 };
 
@@ -46,45 +47,11 @@ type ScanResult = {
   choreMissions: Mission[];
 };
 
-const SCAN_PROMPT = `You are analyzing a photo of a room or living space. Look carefully at what is visible and identify items that are out of place, messy, or need to be cleaned or organized.
-
-Respond with ONLY a valid JSON object in this exact format (no markdown, no extra text):
-{
-  "houseScan": {
-    "overallMessLevel": "high",
-    "totalChoresIdentified": 5,
-    "roomsSummary": {
-      "Living Room": {
-        "messLevel": "medium",
-        "itemsOutOfPlace": 3,
-        "primaryClutterType": "Toys and clothing"
-      }
-    }
-  },
-  "choreMissions": [
-    {
-      "missionId": 1,
-      "missionName": "The Toy Rescue",
-      "description": "Round up scattered items and return them to their homes.",
-      "totalTimeEstimate": "10 minutes",
-      "funFact": "A tidy space helps your brain focus better!",
-      "relatedChores": [
-        {
-          "choreId": 101,
-          "choreTitle": "Pick up toys",
-          "location": "Floor",
-          "itemsInvolved": ["toy cars", "blocks"],
-          "properStorage": "Toy bin",
-          "priority": "high",
-          "estimatedTime": "5 minutes",
-          "difficulty": "easy"
-        }
-      ]
-    }
-  ]
-}
-
-Base your response on what you actually see in the photo. Generate 2-3 missions. If the room looks clean, identify light maintenance tasks. Use "high", "medium", or "low" for mess levels and priority. Use "easy", "medium", or "hard" for difficulty.`;
+// Capture pipeline: request 4K from the camera, then downscale the long edge to
+// MAX_EDGE before upload. Gemini downsamples internally, so sending raw 4K just
+// bloats the payload — one clean downscale preserves small-object detail.
+const MAX_EDGE = 2048;
+const JPEG_QUALITY = 0.92;
 
 export default function ScannerPage() {
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -94,6 +61,7 @@ export default function ScannerPage() {
   const [assignedMissions, setAssignedMissions] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [usedPro, setUsedPro] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -107,7 +75,11 @@ export default function ScannerPage() {
     try {
       if (stream) stream.getTracks().forEach(t => t.stop());
       const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 3840 },
+          height: { ideal: 2160 },
+        }
       });
       setStream(newStream);
       setCameraError(null);
@@ -132,12 +104,13 @@ export default function ScannerPage() {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const scale = Math.min(1, MAX_EDGE / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setFrameBase64(canvas.toDataURL('image/jpeg', 0.8));
+    setFrameBase64(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
     setError(null);
   }, []);
 
@@ -146,26 +119,31 @@ export default function ScannerPage() {
     setScanResult(null);
     setAssignedMissions(new Set());
     setError(null);
+    setUsedPro(false);
   };
 
-  const analyzeImage = async () => {
+  const analyzeImage = async (model?: 'gemini-2.5-pro') => {
     if (!frameBase64) return;
     setIsAnalyzing(true);
     setScanResult(null);
     setError(null);
 
     try {
-      const responseText = await analyzeImageWithAI(frameBase64, SCAN_PROMPT);
-      const jsonMatch = responseText.match(/```json\s*(\{[\s\S]*?\})\s*```/) ??
-                        responseText.match(/(\{[\s\S]*\})/);
-      const jsonString = jsonMatch ? jsonMatch[1] : responseText.trim();
-      setScanResult(JSON.parse(jsonString));
+      const res = await authFetch('/api/scan-room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: frameBase64, ...(model && { model }) }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Scan failed (${res.status})`);
+      }
+      setScanResult(await res.json());
+      setUsedPro(model === 'gemini-2.5-pro');
     } catch (e: unknown) {
       console.error(e);
       const msg = e instanceof Error ? e.message : 'Analysis failed';
-      setError(msg.includes('NEXT_PUBLIC_GEMINI_API_KEY')
-        ? 'Set NEXT_PUBLIC_GEMINI_API_KEY in your Vercel env vars to enable scanner AI.'
-        : `Analysis failed: ${msg}`);
+      setError(`Analysis failed: ${msg}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -258,10 +236,18 @@ export default function ScannerPage() {
                 </button>
                 {!isAnalyzing && !scanResult && (
                   <button
-                    onClick={analyzeImage}
+                    onClick={() => analyzeImage()}
                     className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-full text-white font-medium flex items-center gap-2 transition-colors shadow-lg"
                   >
                     <Sparkles className="w-4 h-4" /> Analyze Room
+                  </button>
+                )}
+                {!isAnalyzing && scanResult && !usedPro && (
+                  <button
+                    onClick={() => analyzeImage('gemini-2.5-pro')}
+                    className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-full text-white font-medium flex items-center gap-2 transition-colors shadow-lg"
+                  >
+                    <Zap className="w-4 h-4" /> Re-scan with Pro
                   </button>
                 )}
               </div>

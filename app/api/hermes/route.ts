@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyAuth, unauthorized } from '@/lib/server-auth';
 
 const BEAR_HOUSE_SYSTEM = `You are Hermes, the intelligent AI backbone of Bear House Family OS — an ADHD safety net designed to combat executive dysfunction and serve as the family's central hub.
 
@@ -12,6 +13,8 @@ Your core purpose:
 You get richer over time as you learn how and when this family uses the app. Use those patterns to give more relevant, timely help.`;
 
 export async function POST(req: NextRequest) {
+  if (!(await verifyAuth(req))) return unauthorized();
+
   const { messages, context, systemOverride } = await req.json();
 
   // Build context block — includes usage memory if present
@@ -59,7 +62,7 @@ ${contextParts.join('\n')}`;
   }
 
   // Fallback: Gemini
-  const geminiKey = process.env.GEMINI_API_KEY ?? process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey) {
     try {
       const { GoogleGenAI } = await import('@google/genai');
@@ -70,10 +73,10 @@ ${contextParts.join('\n')}`;
       ].join('\n\n');
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: fullPrompt,
       });
-      return NextResponse.json({ content: response.text ?? '', model: 'gemini-2.0-flash' });
+      return NextResponse.json({ content: response.text ?? '', model: 'gemini-2.5-flash' });
     } catch (e) {
       console.error('Gemini fallback error:', e);
     }

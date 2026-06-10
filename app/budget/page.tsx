@@ -7,6 +7,7 @@ import { usePlaidLink } from 'react-plaid-link';
 import { usePlaid } from '@/hooks/use-plaid';
 import { useFamilyMembers } from '@/hooks/use-family';
 import { askHermes } from '@/lib/hermes';
+import { authFetch } from '@/lib/api-client';
 import { format, parseISO } from 'date-fns';
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -37,7 +38,7 @@ function PlaidLinkButton({ onSuccess, children }: { onSuccess: (publicToken: str
   async function handleClick() {
     setFetching(true);
     try {
-      const res = await fetch('/api/plaid', {
+      const res = await authFetch('/api/plaid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
