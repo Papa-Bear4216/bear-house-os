@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, RefreshCw, Plus, Loader2, Sparkles, CheckSquare, Map, Clock, ShieldAlert, Zap, Info, AlertTriangle } from 'lucide-react';
-import { authFetch } from '@/lib/api-client';
+import { analyzeImageWithAI } from '@/lib/local-ai';
 import { useTasks } from '@/hooks/use-tasks';
 import { useFamilyMembers } from '@/hooks/use-family';
 import { format } from 'date-fns';
@@ -30,7 +30,6 @@ type Mission = {
   description: string;
   totalTimeEstimate: string;
   funFact: string;
-  firstStep?: string;
   relatedChores: Chore[];
 };
 
@@ -47,11 +46,45 @@ type ScanResult = {
   choreMissions: Mission[];
 };
 
-// Capture pipeline: request 4K from the camera, then downscale the long edge to
-// MAX_EDGE before upload. Gemini downsamples internally, so sending raw 4K just
-// bloats the payload — one clean downscale preserves small-object detail.
-const MAX_EDGE = 2048;
-const JPEG_QUALITY = 0.92;
+const SCAN_PROMPT = `You are analyzing a photo of a room or living space. Look carefully at what is visible and identify items that are out of place, messy, or need to be cleaned or organized.
+
+Respond with ONLY a valid JSON object in this exact format (no markdown, no extra text):
+{
+  "houseScan": {
+    "overallMessLevel": "high",
+    "totalChoresIdentified": 5,
+    "roomsSummary": {
+      "Living Room": {
+        "messLevel": "medium",
+        "itemsOutOfPlace": 3,
+        "primaryClutterType": "Toys and clothing"
+      }
+    }
+  },
+  "choreMissions": [
+    {
+      "missionId": 1,
+      "missionName": "The Toy Rescue",
+      "description": "Round up scattered items and return them to their homes.",
+      "totalTimeEstimate": "10 minutes",
+      "funFact": "A tidy space helps your brain focus better!",
+      "relatedChores": [
+        {
+          "choreId": 101,
+          "choreTitle": "Pick up toys",
+          "location": "Floor",
+          "itemsInvolved": ["toy cars", "blocks"],
+          "properStorage": "Toy bin",
+          "priority": "high",
+          "estimatedTime": "5 minutes",
+          "difficulty": "easy"
+        }
+      ]
+    }
+  ]
+}
+
+Base your response on what you actually see in the photo. Generate 2-3 missions. If the room looks clean, identify light maintenance tasks. Use "high", "medium", or "low" for mess levels and priority. Use "easy", "medium", or "hard" for difficulty.`;
 
 export default function ScannerPage() {
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -61,7 +94,6 @@ export default function ScannerPage() {
   const [assignedMissions, setAssignedMissions] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [usedPro, setUsedPro] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -74,11 +106,12 @@ export default function ScannerPage() {
   const startCamera = async () => {
     try {
       if (stream) stream.getTracks().forEach(t => t.stop());
+      // Request high resolution, degrades gracefully
       const newStream = await navigator.mediaDevices.getUserMedia({
-        video: {
+        video: { 
           facingMode: 'environment',
           width: { ideal: 3840 },
-          height: { ideal: 2160 },
+          height: { ideal: 2160 }
         }
       });
       setStream(newStream);
@@ -93,7 +126,6 @@ export default function ScannerPage() {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     startCamera();
     return () => {
       if (stream) stream.getTracks().forEach(t => t.stop());
@@ -104,13 +136,40 @@ export default function ScannerPage() {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const scale = Math.min(1, MAX_EDGE / Math.max(video.videoWidth, video.videoHeight));
-    canvas.width = Math.round(video.videoWidth * scale);
-    canvas.height = Math.round(video.videoHeight * scale);
+    
+    // Capture at the camera's full resolution
+    const rawWidth = video.videoWidth;
+    const rawHeight = video.videoHeight;
+    
+    // Cap the long edge at 2048px for optimal AI analysis vs payload size
+    const MAX_EDGE = 2048;
+    let width = rawWidth;
+    let height = rawHeight;
+    
+    if (width > height) {
+      if (width > MAX_EDGE) {
+        height = Math.round((height * MAX_EDGE) / width);
+        width = MAX_EDGE;
+      }
+    } else {
+      if (height > MAX_EDGE) {
+        width = Math.round((width * MAX_EDGE) / height);
+        height = MAX_EDGE;
+      }
+    }
+
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setFrameBase64(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
+    
+    // High-quality downscale
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(video, 0, 0, width, height);
+    
+    // Increased JPEG quality (0.8 -> 0.92)
+    setFrameBase64(canvas.toDataURL('image/jpeg', 0.92));
     setError(null);
   }, []);
 
@@ -119,27 +178,37 @@ export default function ScannerPage() {
     setScanResult(null);
     setAssignedMissions(new Set());
     setError(null);
-    setUsedPro(false);
   };
 
-  const analyzeImage = async (model?: 'gemini-2.5-pro') => {
+  const analyzeImage = async (isPro = false) => {
     if (!frameBase64) return;
     setIsAnalyzing(true);
     setScanResult(null);
     setError(null);
 
     try {
-      const res = await authFetch('/api/scan-room', {
+      const { auth } = await import('@/lib/firebase');
+      const token = await auth.currentUser?.getIdToken();
+      
+      const response = await fetch('/api/scan-room', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: frameBase64, ...(model && { model }) }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          image: frameBase64,
+          model: isPro ? 'gemini-2.5-pro' : 'gemini-2.5-flash'
+        })
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Scan failed (${res.status})`);
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `Server error: ${response.status}`);
       }
-      setScanResult(await res.json());
-      setUsedPro(model === 'gemini-2.5-pro');
+
+      const result = await response.json();
+      setScanResult(result);
     } catch (e: unknown) {
       console.error(e);
       const msg = e instanceof Error ? e.message : 'Analysis failed';
@@ -240,14 +309,6 @@ export default function ScannerPage() {
                     className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-full text-white font-medium flex items-center gap-2 transition-colors shadow-lg"
                   >
                     <Sparkles className="w-4 h-4" /> Analyze Room
-                  </button>
-                )}
-                {!isAnalyzing && scanResult && !usedPro && (
-                  <button
-                    onClick={() => analyzeImage('gemini-2.5-pro')}
-                    className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-full text-white font-medium flex items-center gap-2 transition-colors shadow-lg"
-                  >
-                    <Zap className="w-4 h-4" /> Re-scan with Pro
                   </button>
                 )}
               </div>

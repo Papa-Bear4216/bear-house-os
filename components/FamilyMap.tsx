@@ -15,6 +15,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 const FLOORPLAN_STORAGE_PATH = 'floorplan/current';
 const FLOORPLAN_LS_KEY = 'bearhouse_floorplan_url';
+const DEFAULT_FLOORPLAN = '/floorplan.png';
 
 const DefaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -39,7 +40,7 @@ function FloorPlanOverlay({ url, bounds }: { url: string; bounds: L.LatLngBounds
 export default function FamilyMap() {
   const { users } = useFamilyMembers();
   const { tasks, updateTaskStatus } = useTasks();
-  const [floorPlanUrl, setFloorPlanUrl] = useState<string>('');
+  const [floorPlanUrl, setFloorPlanUrl] = useState<string>(DEFAULT_FLOORPLAN);
   const [imgBounds, setImgBounds] = useState<L.LatLngBoundsExpression | null>(null);
   const [uploading, setUploading] = useState(false);
   const [user, setUser] = useState(auth.currentUser);
@@ -57,8 +58,6 @@ export default function FamilyMap() {
         return;
       }
       try {
-        // Parse nested path: 'households/shared/settings'
-        // households/shared/config/floorplan: 4 segments (col/doc/col/doc) ✓
         const docRef = doc(db, 'households', 'shared', 'config', 'floorplan');
         const snap = await getDoc(docRef);
         const url = snap.data()?.floorPlanUrl as string | undefined;
@@ -66,13 +65,12 @@ export default function FamilyMap() {
           setFloorPlanUrl(url);
           localStorage.setItem(FLOORPLAN_LS_KEY, url);
         } else {
-          // Try localStorage cache while Firestore is empty
           const cached = localStorage.getItem(FLOORPLAN_LS_KEY);
-          if (cached) setFloorPlanUrl(cached);
+          setFloorPlanUrl(cached || DEFAULT_FLOORPLAN);
         }
       } catch {
         const cached = localStorage.getItem(FLOORPLAN_LS_KEY);
-        if (cached) setFloorPlanUrl(cached);
+        setFloorPlanUrl(cached || DEFAULT_FLOORPLAN);
       }
     };
     if (user || isPlaceholder) loadFloorPlan();
@@ -109,7 +107,7 @@ export default function FamilyMap() {
   }, []);
 
   const handleRemove = useCallback(async () => {
-    setFloorPlanUrl('');
+    setFloorPlanUrl(DEFAULT_FLOORPLAN);
     setImgBounds(null);
     localStorage.removeItem(FLOORPLAN_LS_KEY);
     if (isPlaceholder) return;
