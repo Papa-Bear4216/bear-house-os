@@ -4,7 +4,15 @@ import { getMessaging, getToken, onMessage, type Messaging } from 'firebase/mess
 import { initializeApp, getApps } from 'firebase/app';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import firebaseConfig from '../firebase-applet-config.json';
+
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? '',
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? '',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? '',
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? '',
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? '',
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '',
+};
 
 let messaging: Messaging | null = null;
 

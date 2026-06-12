@@ -1,7 +1,9 @@
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
-import firebaseConfig from '../firebase-applet-config.json';
+
+const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'prime-mechanic-463314-m8';
+const databaseId = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID ?? '';
 
 let app: App | null = null;
 
@@ -15,20 +17,17 @@ export function getAdminApp(): App {
   if (serviceAccount) {
     app = initializeApp({
       credential: cert(JSON.parse(serviceAccount)),
-      databaseURL: `https://${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'prime-mechanic-463314-m8'}.firebaseio.com`,
+      databaseURL: `https://${projectId}.firebaseio.com`,
     });
   } else {
-    app = initializeApp({
-      projectId: 'prime-mechanic-463314-m8',
-    });
+    app = initializeApp({ projectId });
   }
 
   return app;
 }
 
 export function getAdminFirestore() {
-  // The app lives in a named Firestore database, not (default)
-  return getFirestore(getAdminApp(), firebaseConfig.firestoreDatabaseId);
+  return getFirestore(getAdminApp(), databaseId);
 }
 
 export function getAdminMessaging() {
